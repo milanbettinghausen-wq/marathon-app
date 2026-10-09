@@ -1,5 +1,5 @@
-const CACHE = 'marathon-v3';
-const FILES = ['./', 'index.html', 'style.css', 'style-v3.css', 'util.js', 'state.js', 'engine.js', 'coach.js', 'importer.js', 'strava.js', 'ui.js', 'gym.js', 'app.js', 'manifest.json', 'icon-180.png'];
+const CACHE = 'marathon-v4';
+const FILES = ['./', 'index.html', 'style.css', 'style-v3.css', 'util.js', 'state.js', 'engine.js', 'coach.js', 'importer.js', 'icu.js', 'ui.js', 'gym.js', 'app.js', 'manifest.json', 'icon-180.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)));

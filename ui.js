@@ -21,7 +21,7 @@ function render() {
   $('#tabs').innerHTML = NAV.map(([k, l, p]) =>
     `<button data-act="tab" data-k="${k}" class="${ui.tab === k ? 'on' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg><span>${l}</span></button>`).join('');
   window.scrollTo(0, scroll);
-  if (ui.tab === 'more') loadStravaStatus();
+  if (ui.tab === 'more') loadSourceStatus();
 }
 
 // ---------- kleine Bausteine ----------
@@ -178,8 +178,8 @@ function viewToday() {
     ? `<span class="pill gold">🔥 ${activeStreak()} ${activeStreak() === 1 ? 'Woche' : 'Wochen'} aktiv</span>`
     : `<span class="pill gold">🏁 ${daysToRace > 0 ? `${daysToRace} Tage bis Hamburg` : daysToRace === 0 ? 'Renntag!' : 'Geschafft'}</span>`;
   const sync = wcfg()
-    ? `<button class="pill" data-act="sync">↻ Strava · <span class="syncstate">${syncLabel()}</span></button>`
-    : '<button class="pill" data-act="tab" data-k="more">Strava verbinden</button>';
+    ? `<button class="pill" data-act="sync">↻ Garmin · <span class="syncstate">${syncLabel()}</span></button>`
+    : '<button class="pill" data-act="tab" data-k="more">Garmin verbinden</button>';
 
   return `
   ${pageTop(fmtLong(selD), isToday ? 'Heute' : WDL[dayIdx(selD)])}
@@ -209,7 +209,7 @@ function viewToday() {
     </div>
   </div>
   ${coach ? coachCard(coach) : ''}
-  ${!wcfg() && S.log.length < 5 ? '<div class="card nudge"><h2>Mehr Genauigkeit mit Strava</h2><p>Verbinde Strava, dann startet der Plan auf deinem echten Niveau und neue Aktivitäten erscheinen automatisch.</p><button class="btn" data-act="tab" data-k="more">Strava einrichten</button></div>' : ''}`;
+  ${!wcfg() && S.log.length < 5 ? '<div class="card nudge"><h2>Mehr Genauigkeit mit Garmin</h2><p>Verbinde Garmin über Intervals.icu, dann startet der Plan auf deinem echten Niveau, neue Aktivitäten erscheinen automatisch und du siehst Schlaf und Ruhepuls.</p><button class="btn" data-act="tab" data-k="more">Garmin einrichten</button></div>' : ''}`;
 }
 
 // ---------- GYM ----------
@@ -345,6 +345,7 @@ function viewForm() {
       <p class="legend"><i style="background:var(--swim)"></i>Fitness (letzte Wochen) <i style="background:var(--ball)"></i>Ermüdung (letzte Tage)</p>
       <div class="tiles"><div><b>${Math.round(f.ctl)}</b><small>Fitness</small></div><div><b>${Math.round(f.atl)}</b><small>Ermüdung</small></div><div><b>${enough ? (tsb > 0 ? '+' : '') + Math.round(tsb) : '–'}</b><small>Frische</small></div></div>
       <p class="muted">Berechnet aus Dauer mal Anstrengung (bei Strava aus dem Puls). Frische = Fitness minus Ermüdung.</p></details></div>
+  ${recoveryCard()}
   <div class="tiles4 card"><div><b>${r1(runKm(thisMon, addDays(thisMon, 6)))}</b><small>km diese Woche</small></div>
     <div><b>${Math.round(M.A * 10) / 10}</b><small>km Schnitt/Woche</small></div><div><b>${avgPace}</b><small>Ø Pace /km (4 Wo.)</small></div></div>
   <div class="card"><p class="eyebrow">Laufkilometer pro Woche</p>${barChart(items)}<p class="legend"><i class="l1"></i>gelaufen <i class="l2"></i>geplant · längster Lauf der letzten 5 Wochen: ${r1(longest) || '–'} km</p></div>
@@ -352,6 +353,16 @@ function viewForm() {
     <div class="filters">${sports.map((s) => `<button class="chip${ui.filter === s ? ' on' : ''}" data-act="filter" data-f="${esc(s)}">${esc(s)}</button>`).join('')}</div>
     ${list.map(actRow).join('') || '<p class="muted">Noch nichts eingetragen.</p>'}
     <button class="addrow" data-act="newlog">+ Aktivität manuell eintragen</button></div>`;
+}
+
+function recoveryCard() {
+  const rec = recoverySignals();
+  if (!rec) return '';
+  const l = rec.last;
+  const t = (v, u, k) => (v ? `<div><b>${String(v).replace('.', ',')}${u}</b><small>${k}</small></div>` : '');
+  return `<div class="card"><p class="eyebrow">Erholung laut Garmin · ${fmtShort(parseISO(rec.date))}</p>
+    <div class="tiles">${t(l.sleep, ' h', 'Schlaf')}${t(l.rhr, '', 'Ruhepuls')}${t(l.hrv, '', 'HRV')}</div>
+    <p class="muted" style="margin:10px 0 0">${rec.flags.length ? `Auffällig: ${rec.flags.join(', ')}.` : 'Alles im Normalbereich deiner letzten Wochen.'}</p></div>`;
 }
 
 function viewFood() {
@@ -384,13 +395,13 @@ function viewMore() {
     : `<label>Wunsch km pro Woche<input type="number" name="maintainKm" value="${st.maintainKm}" min="5" max="100"></label>
        <label>Längster Lauf (km)<input type="number" name="maxLong" value="${st.maxLong}" min="8" max="38"></label>`;
   return `${pageTop('Anpassen', 'Einstellungen', '', false)}
-  <div class="card"><h2>Strava</h2><p class="muted" id="stravastate">${wcfg() ? 'Prüfe Verbindung …' : 'Noch nicht eingerichtet. Die Anleitung bekommst du von Claude, Schritt für Schritt.'}</p>
-    <form data-form="strava"><label>Server-Adresse<input name="url" value="${esc(st.worker.url)}" placeholder="https://marathon-strava.….workers.dev" inputmode="url" autocapitalize="off" autocorrect="off"></label>
+  <div class="card"><h2>Garmin über Intervals.icu</h2><p class="muted" id="stravastate">${wcfg() ? 'Prüfe Verbindung …' : 'Noch nicht eingerichtet. Claude führt dich Schritt für Schritt durch.'}</p>
+    <form data-form="source"><label>Server-Adresse<input name="url" value="${esc(st.worker.url)}" placeholder="https://marathon-strava.….workers.dev" inputmode="url" autocapitalize="off" autocorrect="off"></label>
     <label>Passphrase<input name="key" type="password" value="${esc(st.worker.key)}" autocomplete="off"></label><button class="btn full">Speichern</button></form>
-    <div class="row wrap"><button class="ghost" data-act="connect">Mit Strava verbinden</button><button class="ghost" data-act="sync">Jetzt abgleichen</button></div>
-    <div class="row wrap"><button class="ghost" data-act="fullsync">Alles neu laden</button><button class="ghost" data-act="import">CSV-Archiv importieren</button></div>
+    <div class="row wrap"><button class="ghost" data-act="sync">Jetzt abgleichen</button><button class="ghost" data-act="fullsync">Alles neu laden</button></div>
+    <div class="row wrap"><button class="ghost" data-act="import">Strava-CSV importieren</button></div>
     <input type="file" id="csvfile" accept=".csv,text/csv" hidden>
-    <p class="muted">Neue Aktivitäten kommen automatisch, sobald du die App öffnest (und alle paar Minuten, solange sie offen ist). Es werden alle Sportarten übernommen, nicht nur Laufen.</p></div>
+    <p class="muted">Neue Aktivitäten kommen automatisch, sobald du die App öffnest (und alle paar Minuten, solange sie offen ist). Alle Sportarten werden übernommen, dazu Schlaf, Ruhepuls und HRV, soweit Garmin sie liefert.</p></div>
   <div class="card"><h2>${st.mode === 'marathon' ? 'Marathon-Ziel' : 'Fit bleiben'}</h2><form data-form="goal" class="grid2">${goal}
     <label>Maximalpuls (für die Anstrengung)<input type="number" name="maxHR" value="${st.maxHR}" min="150" max="220"></label>
     <button class="btn full">Speichern</button></form>
@@ -401,12 +412,12 @@ function viewMore() {
     <button class="link danger" data-act="reset">Alle Daten löschen</button></div>`;
 }
 
-async function loadStravaStatus() {
+async function loadSourceStatus() {
   const el = $('#stravastate');
   if (!el || !wcfg()) return;
   try {
-    const d = await wf('/strava/status');
-    el.textContent = d.connected ? `Verbunden${d.athlete && d.athlete.name ? ` als ${d.athlete.name}` : ''}. Letzter Abgleich: ${syncLabel()}.` : 'Server erreichbar, aber Strava noch nicht verbunden. Tippe auf „Mit Strava verbinden".';
+    const d = await wf('/status');
+    el.textContent = d.connected ? `Verbunden${d.athlete && d.athlete.name ? ` als ${d.athlete.name}` : ''}. Letzter Abgleich: ${syncLabel()}.` : 'Server erreichbar, aber der Intervals.icu-Schlüssel fehlt noch im Server.';
   } catch (err) { el.textContent = `Keine Verbindung: ${err.message}`; }
 }
 
@@ -443,7 +454,7 @@ function openAct(id) {
     const fast = Math.min(...paces), slow = Math.max(...paces);
     splits = `<h3 style="margin-top:14px">Kilometer</h3>${e.splits.map((s, i) => `<div class="split-r"><span>${i + 1}</span><div class="sp-bar"><i style="width:${s[0] ? 30 + (70 * (slow - s[0])) / Math.max(1, slow - fast) : 0}%"></i></div><b>${s[0] ? fmtPace(s[0]) : '–'}</b><small>${s[1] ? '♥ ' + s[1] : ''}</small></div>`).join('')}`;
   }
-  openSheet(`${sp.icon} ${e.name || e.sport}`, `<p class="muted">${WDL[dayIdx(parseISO(e.date))]}, ${fmtShort(parseISO(e.date))}${e.time ? ' · ' + e.time : ''}${e.src === 'strava' ? ' · von Strava' : ''}${e.dev ? ' · ' + esc(e.dev) : ''}</p>
+  openSheet(`${sp.icon} ${e.name || e.sport}`, `<p class="muted">${WDL[dayIdx(parseISO(e.date))]}, ${fmtShort(parseISO(e.date))}${e.time ? ' · ' + e.time : ''}${e.src === 'strava' ? ' · von Strava' : e.src === 'garmin' ? ' · von Garmin' : ''}${e.dev ? ' · ' + esc(e.dev) : ''}</p>
     <div class="tiles tg">${tiles.map(([k, v]) => `<div><b>${v}</b><small>${k}</small></div>`).join('')}</div>${splits}
     <div class="row wrap">${e.sid && wcfg() && !e.hasDetail ? `<button class="ghost" data-act="loadact" data-id="${e.id}">Mehr Details laden</button>` : ''}<button class="ghost" data-act="editlog" data-id="${e.id}">Bearbeiten</button><button class="ghost" data-act="close">Schließen</button></div>`);
 }
@@ -546,7 +557,7 @@ document.addEventListener('click', (ev) => {
       const e = S.log.find((x) => String(x.id) === D.id);
       if (!e) return;
       toast('Lade Details …');
-      try { await stravaDetail(e.sid); openAct(e.id); } catch (err) { toast(`Strava: ${err.message}`); }
+      try { await icuDetail(e.sid); openAct(e.id); } catch (err) { toast(`Garmin: ${err.message}`); }
     },
     delnote: () => { S.notes = S.notes.filter((n) => n.id !== D.id); persist(); refresh(); },
     coachok: () => {
@@ -575,9 +586,8 @@ document.addEventListener('click', (ev) => {
       S.settings.week[D.d].splice(D.i, 1);
       persist(); closeSheet(); refresh();
     },
-    sync: () => { if (!wcfg()) { ui.tab = 'more'; render(); } else stravaSync(false); },
-    fullsync: () => stravaSync(true),
-    connect: () => stravaConnect(),
+    sync: () => { if (!wcfg()) { ui.tab = 'more'; render(); } else icuSync(false); },
+    fullsync: () => icuSync(true),
     import: () => $('#csvfile').click(),
     importjson: () => $('#jsonfile').click(),
     export: exportData,
@@ -633,7 +643,7 @@ document.addEventListener('submit', (ev) => {
     if (fd.split) it.split = fd.split; if (fd.role) it.role = fd.role;
     it.fixed = fd.fixed ? 1 : 0; if (!it.fixed) delete it.fixed;
     persist(); closeSheet(); refresh();
-  } else if (kind === 'strava') {
+  } else if (kind === 'source') {
     S.settings.worker = { url: (fd.url || '').trim(), key: (fd.key || '').trim() };
     persist(); render(); toast('Gespeichert');
   } else if (kind === 'coach') {
@@ -653,7 +663,7 @@ document.addEventListener('change', async (ev) => {
 
 function exportData() {
   const copy = { ...S.settings, worker: { url: '', key: '' } };
-  const blob = new Blob([JSON.stringify({ v: 3, settings: copy, log: S.log, ov: S.ov, checkin: S.checkin, gym: S.gym, notes: S.notes }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ v: 3, settings: copy, log: S.log, ov: S.ov, checkin: S.checkin, gym: S.gym, notes: S.notes, wellness: S.wellness }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `marathon-sicherung-${iso(new Date())}.json`;
@@ -666,7 +676,7 @@ function importData(text) {
     if (!confirm(`Aktuelle Daten durch die Sicherung (${d.log.length} Einträge) ersetzen?`)) return;
     const w = S.settings.worker;
     S.settings = { ...DEFAULT_SETTINGS, ...d.settings, worker: w }; S.log = d.log; S.ov = d.ov || { skip: {}, extra: {} };
-    S.checkin = d.checkin || {}; S.gym = d.gym || []; S.notes = d.notes || [];
+    S.checkin = d.checkin || {}; S.gym = d.gym || []; S.notes = d.notes || []; S.wellness = d.wellness || {};
     persist(); refresh(); toast('Sicherung eingespielt');
   } catch { toast('Die Datei konnte nicht gelesen werden'); }
 }

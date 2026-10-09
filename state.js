@@ -1,5 +1,5 @@
 // Zustand und Speicher. Alles liegt nur auf dem Geraet (localStorage).
-const KEYS = { settings: 'mar2.settings', log: 'mar2.log', ov: 'mar2.ov', checkin: 'mar2.checkin', gym: 'mar2.gym', notes: 'mar2.notes' };
+const KEYS = { settings: 'mar2.settings', log: 'mar2.log', ov: 'mar2.ov', checkin: 'mar2.checkin', gym: 'mar2.gym', notes: 'mar2.notes', wellness: 'mar2.wellness' };
 
 const SPORTS = {
   run: { name: 'Laufen', icon: '🏃', color: 'var(--run)' },
@@ -84,13 +84,14 @@ const S = {
   checkin: store.get(KEYS.checkin, {}),
   gym: store.get(KEYS.gym, []),
   notes: store.get(KEYS.notes, []),
+  wellness: store.get(KEYS.wellness, {}),
 };
 S.settings.worker = { ...DEFAULT_SETTINGS.worker, ...(S.settings.worker || {}) };
 
 function persist() {
   const ok = [
     store.set(KEYS.settings, S.settings), store.set(KEYS.log, S.log), store.set(KEYS.ov, S.ov),
-    store.set(KEYS.checkin, S.checkin), store.set(KEYS.gym, S.gym), store.set(KEYS.notes, S.notes),
+    store.set(KEYS.checkin, S.checkin), store.set(KEYS.gym, S.gym), store.set(KEYS.notes, S.notes), store.set(KEYS.wellness, S.wellness),
   ].every(Boolean);
   if (!ok) toast('Speichern nicht möglich (privater Modus?)');
 }

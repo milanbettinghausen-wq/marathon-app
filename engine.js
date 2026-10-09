@@ -334,13 +334,15 @@ function coachToday() {
   const hardY = yesterday.some((e) => e.rpe >= 8);
   const twoHard = [1, 2].every((n) => logsOn(iso(addDays(todayDate(), -n))).reduce((s, e) => s + e.min * e.rpe, 0) >= 300);
   const nts = notesOn(T);
+  const rec = typeof recoverySignals === 'function' ? recoverySignals() : null;
   if (ci === 'sick') return { level: 'bad', head: 'Erholung zuerst', text: 'Du hast dich angeschlagen gemeldet. Der Plan für heute ist angepasst. Gesundheit geht vor, ein verpasster Tag kostet fast nichts.' };
   if (nts.length) return { level: 'warn', head: 'Ich passe auf dich auf', text: `Aktiv: ${nts.map((n) => n.label).join(', ')}. Der Plan ist angepasst. Wenn es besser wird, schreib mir einfach „wieder fit".` };
+  if (rec && rec.flags.length >= 2) return { level: 'warn', head: 'Dein Körper meldet Erholungsbedarf', text: `Garmin: ${rec.flags.join(', ')}. Heute lieber locker. Tippe oben auf „Müde", dann passe ich die Einheit an.` };
   if (ratio && ratio > 1.5) return { level: 'bad', head: 'Belastung sehr hoch', text: `Deine Ermüdung liegt ${Math.round((ratio - 1) * 100)} Prozent über deinem Fitnessniveau. Heute Ruhe oder sehr locker, sonst steigt das Verletzungsrisiko.` };
   if (twoHard) return { level: 'warn', head: 'Zwei harte Tage in Folge', text: 'Heute besser locker oder Pause. Die Anpassung passiert in der Erholung.' };
   if (hardY) return { level: 'warn', head: 'Gestern war hart', text: 'Wenn heute Tempo geplant ist, lieber locker laufen. Tippe oben auf „Müde", dann passe ich die Einheit an.' };
   if (ratio && ratio > 1.3) return { level: 'warn', head: 'Belastung erhöht', text: 'Du bist über deinem Normalniveau. Kein Problem, aber achte auf lockere Tage und genug Schlaf.' };
   if (ratio && ratio < 0.7 && f.span > 28) return { level: 'ok', head: 'Frisch', text: 'Du hast weniger Belastung als sonst. Gute Tage für eine anspruchsvolle Einheit.' };
-  if (S.log.length < 5) return { level: 'ok', head: 'Daten fehlen noch', text: 'Verbinde Strava unter Einstellungen. Dann wird der Plan genauer und der Hinweis zuverlässiger.' };
+  if (S.log.length < 5) return { level: 'ok', head: 'Daten fehlen noch', text: 'Verbinde Garmin unter Einstellungen. Dann wird der Plan genauer und der Hinweis zuverlässiger.' };
   return { level: 'ok', head: 'Alles im grünen Bereich', text: 'Mach, was im Plan steht, und hör auf dein Körpergefühl.' };
 }

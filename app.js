@@ -1,6 +1,6 @@
 // Start
 refresh();
-stravaBoot();
+icuBoot();
 
 // Zurueck in der App: Ansicht auffrischen und Strava abgleichen
 document.addEventListener('visibilitychange', () => {
