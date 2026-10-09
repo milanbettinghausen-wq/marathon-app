@@ -1,0 +1,52 @@
+:root {
+  --bg: #0f1720; --card: #17212c; --line: #263341; --text: #e8eef4; --muted: #8fa1b3;
+  --accent: #3ddc97; --warn: #ffb454; --bad: #ff6b6b;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.4 -apple-system, system-ui, sans-serif;
+  padding: env(safe-area-inset-top) 16px calc(84px + env(safe-area-inset-bottom));
+}
+main { max-width: 560px; margin: 0 auto; }
+h1 { font-size: 1.5rem; margin: 18px 0 2px; }
+h2 { font-size: 1rem; margin: 0 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.sub { color: var(--muted); margin: 0 0 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.big { font-size: 1.25rem; font-weight: 650; margin: 2px 0; }
+.hint { border-left: 4px solid var(--accent); }
+.hint.warn { border-color: var(--warn); }
+.hint.bad { border-color: var(--bad); }
+.bar { height: 10px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 8px 0 4px; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+.day { display: flex; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); align-items: flex-start; }
+.day:first-of-type { border-top: 0; }
+.day.today { background: rgba(61,220,151,.08); margin: 0 -14px; padding: 9px 14px; }
+.dn { width: 28px; font-weight: 700; color: var(--muted); }
+.day .t { flex: 1; }
+.day .t small { color: var(--muted); display: block; }
+.ok { color: var(--accent); font-weight: 700; }
+nav#tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: #0b121a;
+  border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
+}
+nav#tabs button { flex: 1; background: none; border: 0; color: var(--muted); padding: 14px 4px; font-size: .95rem; }
+nav#tabs button.on { color: var(--accent); font-weight: 700; }
+button { font: inherit; }
+.btn, dialog button[type=submit], .primary {
+  background: var(--accent); color: #06281a; border: 0; border-radius: 12px; padding: 12px 16px; font-weight: 700; width: 100%;
+}
+.ghost { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 12px; padding: 12px 16px; }
+.small { font-size: .85rem; padding: 6px 10px; width: auto; }
+dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; width: min(92vw, 420px); }
+dialog::backdrop { background: rgba(0,0,0,.6); }
+label { display: block; margin: 10px 0; color: var(--muted); font-size: .9rem; }
+input, select {
+  display: block; width: 100%; margin-top: 4px; padding: 11px; font-size: 16px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+}
+.row { display: flex; gap: 10px; margin-top: 14px; }
+.log { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.log:first-of-type { border-top: 0; }
+.log small { color: var(--muted); display: block; }
+.x { background: none; border: 0; color: var(--bad); padding: 6px 10px; }

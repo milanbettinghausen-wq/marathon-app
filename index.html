@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Marathon">
+<meta name="theme-color" content="#0f1720">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+<title>Marathon</title>
+</head>
+<body>
+<main id="view"></main>
+
+<nav id="tabs">
+  <button data-tab="training" class="on">Training</button>
+  <button data-tab="food">Ernährung</button>
+  <button data-tab="settings">Einstellungen</button>
+</nav>
+
+<dialog id="dlg">
+  <form method="dialog" id="logform">
+    <h3>Training eintragen</h3>
+    <label>Datum <input type="date" name="date" required></label>
+    <label>Sportart
+      <select name="sport">
+        <option>Laufen</option><option>Radfahren</option><option>Schwimmen</option>
+        <option>Fußball</option><option>Gym</option>
+      </select>
+    </label>
+    <label>Dauer (Minuten) <input type="number" name="min" min="1" max="600" required></label>
+    <label>Distanz (km, optional) <input type="number" name="km" min="0" step="0.1"></label>
+    <label>Anstrengung 1 bis 10 <input type="number" name="rpe" min="1" max="10" value="5" required></label>
+    <div class="row">
+      <button type="button" id="cancel" class="ghost">Abbrechen</button>
+      <button type="submit">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="plan.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
