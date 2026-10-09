@@ -91,6 +91,15 @@ export default {
         const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
         return json(await stravaGet(env, `/athlete/activities?after=${after}&page=${page}&per_page=100`), 200, cors);
       }
+      if (url.pathname === '/off/search') {
+        const q = (url.searchParams.get('q') || '').trim().slice(0, 80);
+        if (!q) return json({ hits: [] }, 200, cors);
+        const r = await fetch(`https://search.openfoodfacts.org/search?q=${encodeURIComponent(q)}&page_size=20&langs=de&fields=code,product_name,brands,nutriments,serving_quantity,quantity`, {
+          headers: { 'User-Agent': 'MarathonApp/1.0 (private use)' },
+        });
+        if (!r.ok) throw Object.assign(new Error('Open Food Facts gerade nicht erreichbar'), { status: 502 });
+        return json(await r.json(), 200, cors);
+      }
       const m = url.pathname.match(/^\/strava\/activity\/(\d+)$/);
       if (m) return json(await stravaGet(env, `/activities/${m[1]}`), 200, cors);
       if (url.pathname === '/strava/disconnect' && req.method === 'POST') {
