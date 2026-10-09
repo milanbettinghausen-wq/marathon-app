@@ -1,0 +1,63 @@
+/* Ergaenzungen v3: Gym, Plan, Coach, Aktivitaeten */
+:root { --other: #94a3b8; }
+.topr { display: flex; align-items: center; gap: 8px; }
+.icon { width: 40px; height: 40px; border-radius: 14px; background: var(--s1); border: 1px solid var(--line); color: var(--text); font-size: 1.1rem; }
+.pills { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.pill { background: var(--s1); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 7px 12px; font-size: .78rem; font-weight: 600; }
+.pill.gold { background: linear-gradient(145deg, rgba(255,207,90,.2), rgba(255,122,89,.1)); border-color: rgba(255,207,90,.35); color: #ffe3a1; }
+.sp { margin: 14px 2px 8px; }
+.btn.big { padding: 15px 22px; font-size: 1.05rem; flex: 1; background: linear-gradient(135deg, #b9a4ff, var(--gym)); color: #170b3a; box-shadow: 0 8px 28px rgba(167,139,250,.35); }
+.row.wrap { flex-wrap: wrap; } .row.wrap > button { flex: 1 1 40%; padding: 12px 10px; }
+
+/* Aktivitaetszeilen */
+.act { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; margin-bottom: 8px; border-radius: 16px; background: var(--s1); border: 1px solid var(--line); cursor: pointer; }
+.act-i { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--c) 20%, transparent); flex: none; }
+.act > div { flex: 1; min-width: 0; } .act b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .act small { display: block; }
+.act-go { color: var(--muted); font-size: 1.3rem; }
+
+/* Gym-Karte auf Heute */
+.gymcard { display: block; background: linear-gradient(150deg, rgba(167,139,250,.30), rgba(167,139,250,.06) 70%); border-color: rgba(167,139,250,.55); box-shadow: 0 10px 40px rgba(167,139,250,.18); padding: 16px; }
+.gc-top { display: flex; gap: 12px; align-items: center; } .gc-ic { font-size: 1.9rem; }
+.gc-t { font-size: 1.35rem; font-weight: 800; letter-spacing: -.02em; }
+.gc-ex { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 8px; }
+.gc-ex span { background: rgba(167,139,250,.16); border: 1px solid rgba(167,139,250,.3); border-radius: 10px; padding: 4px 9px; font-size: .78rem; }
+.nextgym .ng { display: flex; justify-content: space-between; align-items: center; gap: 10px; } .nextgym small { display: block; }
+
+/* Coach */
+.nchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.nchip { background: rgba(255,180,84,.15); border: 1px solid rgba(255,180,84,.4); border-radius: 12px; padding: 5px 6px 5px 10px; font-size: .8rem; display: inline-flex; gap: 6px; align-items: center; }
+.nchip button { background: none; border: 0; color: var(--muted); padding: 0 4px; }
+.coachform { display: flex; gap: 8px; margin-top: 12px; } .coachform input { margin: 0 !important; flex: 1; }
+
+/* Plan */
+.phase { margin: 18px 0 6px; }
+.ph-h { display: flex; gap: 10px; align-items: flex-start; margin: 0 2px 8px; }
+.ph-h i { width: 6px; align-self: stretch; border-radius: 4px; background: var(--p); flex: none; }
+.ph-h b { display: block; font-size: 1.05rem; } .ph-h small { display: block; line-height: 1.35; }
+.wk > button { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; }
+.wk.now { border-color: var(--run); box-shadow: 0 0 22px rgba(94,240,196,.16); }
+.wk-l b, .wk-m b { display: block; } .wk-l small, .wk-m small { display: block; }
+.wk-m { text-align: right; } .wk-m b { font-size: 1.2rem; }
+.wk-r { display: flex; align-items: center; gap: 6px; min-width: 48px; justify-content: flex-end; } .chev { color: var(--muted); }
+.tag { font-size: .68rem; font-weight: 700; border-radius: 8px; padding: 3px 7px; } .tag.soft { background: rgba(76,201,240,.18); color: var(--swim); } .tag.hot { background: rgba(255,122,89,.2); color: var(--ball); }
+.legend2 { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: .75rem; color: var(--muted); } .legend2 i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
+
+/* Verlauf */
+details summary { cursor: pointer; color: var(--run); font-weight: 600; font-size: .9rem; margin: 10px 0 6px; }
+.state .st-t { font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em; margin: 2px 0; color: var(--run); }
+.state.warn .st-t { color: var(--warn); } .state.bad .st-t { color: var(--bad); }
+.filters { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 4px; } .filters .chip { white-space: nowrap; }
+.chip.on { background: var(--run); color: #04140e; border-color: var(--run); }
+.tg { grid-template-columns: repeat(3, 1fr); }
+.split-r { display: grid; grid-template-columns: 22px 1fr 46px 56px; gap: 8px; align-items: center; font-size: .85rem; padding: 3px 0; }
+.split-r > span { color: var(--muted); } .sp-bar { height: 8px; background: rgba(255,255,255,.07); border-radius: 5px; overflow: hidden; } .sp-bar i { display: block; height: 100%; background: var(--run); border-radius: 5px; }
+
+/* Gym-Tab */
+.gymhero { background: linear-gradient(150deg, rgba(167,139,250,.32), rgba(167,139,250,.05) 70%); border-color: rgba(167,139,250,.5); }
+.gh-t { font-size: 1.7rem; font-weight: 800; letter-spacing: -.03em; margin: 4px 0; }
+.gh-w { display: flex; gap: 6px; align-items: center; margin-top: 14px; } .gh-w i { width: 26px; height: 8px; border-radius: 5px; background: rgba(255,255,255,.12); } .gh-w i.on { background: var(--gym); } .gh-w small { margin-left: 8px; }
+.splitc .sc-h { display: flex; justify-content: space-between; align-items: center; } .splitc b { font-size: 1.15rem; }
+.srow { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); } .srow:first-of-type { border-top: 0; }
+.srow small { display: block; max-width: 210px; } .sr-r { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: .85rem; }
+.spark { width: 70px; height: 26px; } .up { color: var(--run); } .down { color: var(--bad); }
+.gline { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid var(--line); } .gline span { color: var(--muted); font-size: .85rem; }

@@ -1,12 +1,12 @@
 // Trainings-Engine: berechnet Wochenvolumen und Einheiten aus dem, was wirklich passiert ist.
 // Alle Zahlen sind Faustwerte, kein medizinischer Rat.
 
-let M = { weeks: {}, A: 0, baseLong: 0, peak: 0, wo0: 0, form: null };
+let M = { weeks: {}, A: 0, baseLong: 0, peak: 0, wo0: 0, form: null, maintain: false };
 
-function paces() {
+function paces(add = 0) {
   const mp = S.settings.goalSec / 42.195;
-  const rg = (a, b) => `${fmtPace(mp * a)} bis ${fmtPace(mp * b)}`;
-  return { mp: fmtPace(mp), easy: rg(1.14, 1.26), tempo: rg(0.93, 0.955), interval: rg(0.85, 0.88), mpSec: mp };
+  const rg = (a, b, x = 0) => `${fmtPace(mp * a + x)} bis ${fmtPace(mp * b + x)}`;
+  return { mp: fmtPace(mp), easy: rg(1.14, 1.26, add), tempo: rg(0.93, 0.955), interval: rg(0.85, 0.88), mpSec: mp };
 }
 
 const sportOfType = (t) => SPORT_NAME[t];
@@ -14,6 +14,11 @@ const logsOn = (d) => S.log.filter((e) => e.date === d);
 function runKm(fromD, toD) {
   const a = iso(fromD), b = iso(toD);
   return S.log.filter((e) => e.sport === 'Laufen' && e.date >= a && e.date <= b).reduce((s, e) => s + (e.km || 0), 0);
+}
+// Anstrengung (1 bis 10) aus dem Durchschnittspuls schaetzen
+function rpeFromHR(hr) {
+  const f = hr / S.settings.maxHR;
+  return clamp(Math.round(1 + ((f - 0.5) / 0.45) * 9), 1, 10);
 }
 function dailyLoads() {
   const m = {};
@@ -36,14 +41,44 @@ function formSeries(days = 56) {
   }
   return { series: out.slice(-days), atl, ctl, span: daysBetween(start, today) };
 }
+// Wie viele Wochen am Stueck warst du mindestens zweimal aktiv?
+function activeStreak() {
+  let mon = mondayOf(todayDate()), n = 0, first = true;
+  for (let i = 0; i < 80; i++) {
+    const cnt = S.log.filter((e) => e.date >= iso(mon) && e.date <= iso(addDays(mon, 6))).length;
+    if (cnt >= 2) n++;
+    else if (!first) break;
+    first = false;
+    mon = addDays(mon, -7);
+  }
+  return n;
+}
 
-// ---------- Wochenvolumen ueber alle Wochen bis zum Rennen ----------
+// ---------- Hinweise aus dem Schreib-Coach ----------
+function notesOn(d) { return S.notes.filter((n) => n.from <= d && n.until >= d); }
+function noteEffect(d) {
+  const ns = notesOn(d);
+  const e = { ns, kmF: 1, noQ: false, pace: 0, gymWarn: '', ballWarn: '', reasons: [] };
+  ns.forEach((n) => {
+    e.kmF = Math.min(e.kmF, n.kmF == null ? 1 : n.kmF);
+    e.noQ = e.noQ || !!n.noQ;
+    e.pace = Math.max(e.pace, n.paceAdd || 0);
+    if (n.gymWarn) e.gymWarn = n.gymWarn;
+    if (n.ballWarn) e.ballWarn = n.ballWarn;
+    e.reasons.push(n.label);
+  });
+  return e;
+}
+
+// ---------- Wochenvolumen ueber alle Wochen ----------
 function runModel() {
   const st = S.settings;
   const today = todayDate();
   const thisMon = mondayOf(today);
   const raceMon = mondayOf(parseISO(st.race));
   const wo0 = daysBetween(thisMon, raceMon) / 7;
+  const afterRace = st.mode === 'marathon' && wo0 < 0;
+  const maintain = st.mode === 'maintain' || afterRace;
 
   const hist = [1, 2, 3, 4].map((k) => runKm(addDays(thisMon, -7 * k), addDays(thisMon, -7 * k + 6)));
   const wts = [2, 1.5, 1, 1];
@@ -56,6 +91,21 @@ function runModel() {
   const baseLong = Math.max(6, longs.length ? Math.max(...longs) : st.startLong);
 
   const weeks = {};
+  if (maintain) {
+    const weeksSinceRace = afterRace ? -wo0 : 99;
+    for (let k = 0; k < 12; k++) {
+      const mon = iso(addDays(thisMon, 7 * k));
+      const ago = weeksSinceRace + k;
+      let vol = st.maintainKm, phase = 'Fit bleiben', cut = false;
+      if (afterRace && ago === 1) { vol = Math.max(A, st.maintainKm) * 0.3; phase = 'Erholung'; }
+      else if (afterRace && ago === 2) { vol = Math.max(A, st.maintainKm) * 0.6; phase = 'Erholung'; }
+      else if (k % 4 === 3) { vol *= 0.8; cut = true; }
+      const long = clamp(Math.round(vol * 0.4), 6, st.maxLong);
+      weeks[mon] = { mon, wo: 99, q: k, maintain: true, cut, phase, vol: Math.round(vol), long: phase === 'Erholung' ? Math.round(vol * 0.35) : long };
+    }
+    return { weeks, A, baseLong, peak: Math.round(st.maintainKm), wo0, hasData, afterRace, maintain: true, form: formSeries() };
+  }
+
   let prevNC = A, curLong = baseLong, peak = 0;
   const isCut = (wo) => wo % 4 === 0 && wo >= 4;
   for (let k = 0; ; k++) {
@@ -85,7 +135,7 @@ function runModel() {
     const phase = wo === 0 ? 'Rennwoche' : wo <= 2 ? 'Tapering' : wo <= 8 ? 'Spezifisch' : wo <= 18 ? 'Aufbau' : 'Grundlage';
     weeks[mon] = { mon, wo, cut, phase, vol: Math.round(vol), long: Math.round(long) };
   }
-  return { weeks, A, baseLong, peak: Math.round(peak), wo0, hasData, form: formSeries() };
+  return { weeks, A, baseLong, peak: Math.round(peak), wo0, hasData, afterRace: false, maintain: false, form: formSeries() };
 }
 
 // ---------- Einheiten pro Woche ----------
@@ -106,12 +156,15 @@ function weekSessions(monISO) {
       if (!S.ov.skip[`${di}|${key}`]) list.push(mkSession(it, key, di));
     });
     (S.ov.extra[di] || []).forEach((it) => list.push(mkSession(it, it.id, di)));
-    if (di === S.settings.race) list.push(mkSession({ t: 'race' }, 'race', di));
+    if (S.settings.mode === 'marathon' && di === S.settings.race) list.push(mkSession({ t: 'race' }, 'race', di));
+    // Gym zuerst, weil es dir wichtig ist
+    list.sort((a, b) => (b.t === 'gym') - (a.t === 'gym'));
     days[di] = list;
     list.filter((s) => s.t === 'run').forEach((s) => runs.push(s));
   }
 
   // erledigt-Status: Log-Eintraege der gleichen Sportart am selben Tag
+  const extras = {};
   Object.entries(days).forEach(([di, list]) => {
     const pool = logsOn(di).slice();
     list.forEach((s) => {
@@ -119,6 +172,8 @@ function weekSessions(monISO) {
       const idx = pool.findIndex((e) => e.sport === name);
       if (idx >= 0) { s.done = true; s.entry = pool[idx]; pool.splice(idx, 1); }
     });
+    // Aktivitaeten, die nicht im Plan standen (z. B. Wandern aus Strava)
+    extras[di] = pool;
   });
 
   if (m) {
@@ -137,11 +192,12 @@ function weekSessions(monISO) {
       others.forEach((s) => { s.km = Math.max(3, Math.round((rest * wt(s)) / tot)); });
     }
     adaptCurrentWeek(runs, mon);
+    applyNotes(days);
     applyReadiness(days);
   }
   runs.forEach((s) => { if (s.km != null && s.km <= 0) s.km = 0; });
-  Object.values(days).flat().forEach((s) => describe(s, m));
-  return { days, m };
+  Object.values(days).forEach((list) => list.forEach((s) => describe(s, m)));
+  return { days, m, extras };
 }
 
 // Hast du diese Woche mehr oder weniger gelaufen als geplant, rutscht der Rest mit
@@ -171,12 +227,37 @@ function adaptCurrentWeek(runs, mon) {
   });
 }
 
+// Wirkung von Knie, Krankheit, Urlaub usw. aus dem Schreib-Coach
+function applyNotes(days) {
+  Object.entries(days).forEach(([di, list]) => {
+    const eff = noteEffect(di);
+    if (!eff.ns.length) return;
+    const why = eff.reasons.join(', ');
+    list.forEach((s) => {
+      if (s.done) return;
+      if (s.t === 'run') {
+        if (eff.kmF === 0) {
+          s.km = 0; s.restDay = true; s.adj = `${why}: kein Lauf.`;
+          s.alt = 'Wenn es schmerzfrei geht: 30 bis 45 min Rad oder Schwimmen.';
+        } else {
+          if (eff.noQ && s.role === 'quality') s.role = 'easy';
+          if (eff.kmF < 1) s.km = Math.max(3, Math.round(s.km * eff.kmF));
+          s.paceAdd = eff.pace;
+          s.adj = `${why}: ${eff.kmF < 1 ? 'kürzer, ' : ''}${eff.noQ ? 'ohne Tempo, ' : ''}${eff.pace ? 'langsamer' : 'locker'}.`;
+        }
+      }
+      if (s.t === 'football' && eff.ballWarn) s.warn = eff.ballWarn;
+      if (s.t === 'gym' && eff.gymWarn) s.warn = eff.gymWarn;
+    });
+  });
+}
+
 function applyReadiness(days) {
   const T = iso(todayDate());
   const ci = S.checkin[T];
   if (!ci || ci === 'fit' || !days[T]) return;
   days[T].forEach((s) => {
-    if (s.done) return;
+    if (s.done || s.restDay) return;
     if (s.t === 'run') {
       if (ci === 'sick') { s.km = 0; s.restDay = true; s.adj = 'Angeschlagen: heute kein Lauf.'; }
       else { s.role = s.role === 'quality' ? 'easy' : s.role; s.km = Math.max(3, Math.round(s.km * 0.8)); s.adj = 'Müde: lockerer und etwa 20 Prozent kürzer.'; }
@@ -190,17 +271,18 @@ function applyReadiness(days) {
 const QUALITY_ORDER = (wo) => (wo <= 10 ? ['mp', 'tempo', 'intervals', 'mp'] : ['intervals', 'tempo', 'fartlek', 'tempo']);
 
 function describe(s, m) {
-  const P = paces();
-  const wo = m ? m.wo : 20;
   const st = S.settings;
+  const P = paces(s.paceAdd || 0);
+  const wo = m ? m.wo : 20;
+  const maintain = m && m.maintain;
   if (s.t === 'football') {
     s.title = s.n || 'Fußball';
     s.detail = `${s.min} min · Anstrengung etwa ${s.rpe}/10${m && m.wo === 0 ? ' · In der Rennwoche lieber locker.' : ''}`;
     s.est = { min: s.min, rpe: s.rpe };
   } else if (s.t === 'gym') {
     const sp = st.gymSplits[s.split] || { name: 'Gym', ex: [] };
-    s.title = `Gym · ${sp.name}`;
-    s.detail = sp.ex.length ? sp.ex.join(', ') : 'Übungen unter Mehr festlegen';
+    s.title = sp.name;
+    s.detail = sp.ex.length ? sp.ex.join(' · ') : 'Übungen unter Gym festlegen';
     s.est = { min: 60, rpe: 6 };
   } else if (s.t === 'swim') {
     s.title = 'Schwimmen'; s.detail = '30 bis 45 min locker, schont die Gelenke.'; s.est = { min: 40, rpe: 4 };
@@ -212,20 +294,19 @@ function describe(s, m) {
     s.km = 42.2; s.est = { min: Math.round(st.goalSec / 60), rpe: 9 };
   } else if (s.t === 'run') {
     const km = s.km || 0;
-    s.est = { min: Math.round(km * (P.mpSec * 1.2) / 60), rpe: 5 };
-    if (s.restDay) { s.title = 'Pause'; s.detail = 'Ruh dich aus. Wenn es besser ist, geht es morgen normal weiter.'; return; }
+    s.est = { min: Math.round(km * (P.mpSec * 1.2 + (s.paceAdd || 0)) / 60), rpe: 5 };
+    if (s.restDay) { s.title = 'Pause'; s.detail = s.alt || 'Ruh dich aus. Wenn es besser ist, geht es morgen normal weiter.'; return; }
     if (!m) { s.title = s.role === 'long' ? 'Langer Lauf' : 'Lauf'; s.detail = s.done ? '' : 'Kein Plan für diese Woche.'; return; }
     if (s.role === 'long') {
-      const mpKm = km >= 18 && wo <= 14 && !(m && m.cut) ? clamp(Math.round(km * 0.2), 3, 6) : 0;
+      const mpKm = !maintain && km >= 18 && wo <= 14 && !m.cut && !s.paceAdd ? clamp(Math.round(km * 0.2), 3, 6) : 0;
       s.title = 'Langer Lauf';
       s.detail = `${km} km ruhig (${P.easy} min/km)${mpKm ? `, die letzten ${mpKm} km in Marathonpace (${P.mp})` : ''}`;
       s.est.rpe = 6;
     } else if (s.role === 'quality' && km >= 5) {
-      const kind = QUALITY_ORDER(wo)[wo % 4];
+      const kind = maintain ? ['intervals', 'tempo', 'fartlek', 'tempo'][m.q % 4] : QUALITY_ORDER(wo)[wo % 4];
       const wc = km >= 8 ? 2 : 1.5;
       const core = Math.max(2, r1(km - 2 * wc));
       if (kind === 'intervals') {
-        const n = Math.max(3, Math.round(core / 1.4));
         s.title = 'Intervalle'; s.detail = `${wc} km einlaufen, ${Math.max(3, Math.round(core / 1.4))} x 1000 m in ${P.interval} min/km (400 m Trabpause), ${wc} km auslaufen`;
       } else if (kind === 'tempo') {
         s.title = 'Tempodauerlauf'; s.detail = `${wc} km einlaufen, ${core} km in ${P.tempo} min/km, ${wc} km auslaufen`;
@@ -252,12 +333,14 @@ function coachToday() {
   const yesterday = logsOn(iso(addDays(todayDate(), -1)));
   const hardY = yesterday.some((e) => e.rpe >= 8);
   const twoHard = [1, 2].every((n) => logsOn(iso(addDays(todayDate(), -n))).reduce((s, e) => s + e.min * e.rpe, 0) >= 300);
+  const nts = notesOn(T);
   if (ci === 'sick') return { level: 'bad', head: 'Erholung zuerst', text: 'Du hast dich angeschlagen gemeldet. Der Plan für heute ist angepasst. Gesundheit geht vor, ein verpasster Tag kostet fast nichts.' };
+  if (nts.length) return { level: 'warn', head: 'Ich passe auf dich auf', text: `Aktiv: ${nts.map((n) => n.label).join(', ')}. Der Plan ist angepasst. Wenn es besser wird, schreib mir einfach „wieder fit".` };
   if (ratio && ratio > 1.5) return { level: 'bad', head: 'Belastung sehr hoch', text: `Deine Ermüdung liegt ${Math.round((ratio - 1) * 100)} Prozent über deinem Fitnessniveau. Heute Ruhe oder sehr locker, sonst steigt das Verletzungsrisiko.` };
   if (twoHard) return { level: 'warn', head: 'Zwei harte Tage in Folge', text: 'Heute besser locker oder Pause. Die Anpassung passiert in der Erholung.' };
   if (hardY) return { level: 'warn', head: 'Gestern war hart', text: 'Wenn heute Tempo geplant ist, lieber locker laufen. Tippe oben auf „Müde", dann passe ich die Einheit an.' };
   if (ratio && ratio > 1.3) return { level: 'warn', head: 'Belastung erhöht', text: 'Du bist über deinem Normalniveau. Kein Problem, aber achte auf lockere Tage und genug Schlaf.' };
   if (ratio && ratio < 0.7 && f.span > 28) return { level: 'ok', head: 'Frisch', text: 'Du hast weniger Belastung als sonst. Gute Tage für eine anspruchsvolle Einheit.' };
-  if (S.log.length < 5) return { level: 'ok', head: 'Daten fehlen noch', text: 'Importiere deine Strava-Historie unter „Form". Dann wird der Plan genauer und der Hinweis zuverlässiger.' };
+  if (S.log.length < 5) return { level: 'ok', head: 'Daten fehlen noch', text: 'Verbinde Strava unter Einstellungen. Dann wird der Plan genauer und der Hinweis zuverlässiger.' };
   return { level: 'ok', head: 'Alles im grünen Bereich', text: 'Mach, was im Plan steht, und hör auf dein Körpergefühl.' };
 }

@@ -1,31 +1,72 @@
-// Gym-Logger: Saetze eintragen, Vorwerte sehen, Pausentimer, Steigerungs-Vorschlag
+// Gym: Logger, Statistik, Rekorde
 let G = null;
 let gymTick = null;
 
+const e1rm = (w, r) => (w > 0 && r > 0 ? w * (1 + r / 30) : 0);
+const tonnage = (g) => g.ex.reduce((a, e) => a + e.sets.reduce((b, s) => b + s.w * s.r, 0), 0);
+const fmtKg = (x) => (x >= 1000 ? `${r1(x / 1000)} t` : `${Math.round(x)} kg`);
+
 function lastGym(split) {
-  return [...S.gym].filter((g) => g.split === split).sort((a, b) => b.date.localeCompare(a.date))[0];
+  return [...S.gym].filter((g) => g.split === split).sort((a, b) => b.date.localeCompare(a.date) || (b.id || 0) - (a.id || 0))[0];
+}
+// Bester geschaetzter Max-Wert je Uebung und Datum
+function exerciseHistory() {
+  const h = {};
+  [...S.gym].sort((a, b) => a.date.localeCompare(b.date)).forEach((g) => {
+    g.ex.forEach((e) => {
+      const best = Math.max(0, ...e.sets.map((s) => e1rm(s.w, s.r)));
+      const top = e.sets.reduce((a, s) => (s.w > a.w ? s : a), { w: 0, r: 0 });
+      if (best > 0) (h[e.name] = h[e.name] || []).push({ date: g.date, e1: best, top });
+    });
+  });
+  return h;
+}
+function gymWeeks(n = 8) {
+  const thisMon = mondayOf(todayDate());
+  const out = [];
+  for (let k = n - 1; k >= 0; k--) {
+    const mon = addDays(thisMon, -7 * k), a = iso(mon), b = iso(addDays(mon, 6));
+    const gs = S.gym.filter((g) => g.date >= a && g.date <= b);
+    out.push({ label: fmtShort(mon).replace(/\.\d+\.$/, '.'), v: gs.reduce((s, g) => s + tonnage(g), 0) / 1000, n: gs.length, cur: k === 0 });
+  }
+  return out;
+}
+function nextGym() {
+  const t = todayDate();
+  for (let i = 0; i < 14; i++) {
+    const d = addDays(t, i), di = iso(d);
+    const wp = weekSessions(iso(mondayOf(d)));
+    const s = (wp.days[di] || []).find((x) => x.t === 'gym' && !x.done);
+    if (s) return { date: di, s, d };
+  }
+  return null;
 }
 
 function startGym(date, split) {
   const sp = S.settings.gymSplits[split];
-  if (!sp || !sp.ex.length) { toast('Lege unter „Mehr" erst Übungen für den Split fest'); return; }
+  if (!sp || !sp.ex.length) { toast('Lege erst Übungen für den Split fest'); return; }
   const prev = lastGym(split);
   G = {
     date, split, start: Date.now(), restEnd: 0,
-    ex: sp.ex.map((name) => {
-      const p = prev && prev.ex.find((x) => x.name === name);
-      const sets = p && p.sets.length ? p.sets.map((s) => ({ w: s.w, r: s.r, done: false })) : [0, 1, 2].map(() => ({ w: '', r: '', done: false }));
-      let tip = '';
-      if (p && p.sets.length) {
-        const top = Math.max(...p.sets.map((s) => s.w));
-        tip = p.sets.every((s) => s.r >= 12) ? `Alle Sätze geschafft: probiere ${top + 2.5} kg` : 'Ziel: 8 bis 12 Wiederholungen, bei 12 steigern';
-      }
-      return { name, sets, last: p ? p.sets : null, tip };
-    }),
+    ex: sp.ex.map((name) => makeEx(name, prev)),
   };
   renderGym();
   clearInterval(gymTick);
   gymTick = setInterval(tickGym, 1000);
+}
+function makeEx(name, prevSession) {
+  let p = prevSession && prevSession.ex.find((x) => x.name === name);
+  if (!p) { // zuletzt irgendwo gemachte Werte nehmen
+    const last = [...S.gym].sort((a, b) => b.date.localeCompare(a.date)).find((g) => g.ex.some((x) => x.name === name));
+    p = last && last.ex.find((x) => x.name === name);
+  }
+  const sets = p && p.sets.length ? p.sets.map((s) => ({ w: s.w, r: s.r, done: false })) : [0, 1, 2].map(() => ({ w: '', r: '', done: false }));
+  let tip = '';
+  if (p && p.sets.length) {
+    const top = Math.max(...p.sets.map((s) => s.w));
+    tip = p.sets.every((s) => s.r >= 12) ? `Alle Sätze geschafft: probiere ${top + 2.5} kg` : 'Ziel: 8 bis 12 Wiederholungen, bei 12 steigern';
+  }
+  return { name, sets, last: p ? p.sets : null, tip };
 }
 
 function renderGym() {
@@ -39,7 +80,8 @@ function renderGym() {
     <div class="sets">${e.sets.map((s, si) => `<div class="set${s.done ? ' done' : ''}"><span>${si + 1}</span>
       <input inputmode="decimal" placeholder="kg" value="${s.w}" data-gw="${ei}.${si}.w"><input inputmode="numeric" placeholder="Wdh" value="${s.r}" data-gw="${ei}.${si}.r">
       <button data-act="gtoggle" data-e="${ei}" data-s="${si}" class="tick">${s.done ? '✓' : '○'}</button></div>`).join('')}</div>
-    <button class="addrow" data-act="gaddset" data-e="${ei}">+ Satz</button></div>`).join('')}</div>
+    <button class="addrow" data-act="gaddset" data-e="${ei}">+ Satz</button></div>`).join('')}
+    <button class="addrow" data-act="gaddex">+ Übung hinzufügen</button></div>
   <div class="grest" id="grest"></div>`;
   el.classList.add('open');
   tickGym();
@@ -67,14 +109,33 @@ function gymHandlers(D) {
       if (s.done) G.restEnd = Date.now() + 90000;
       renderGym();
     },
+    gaddex: () => {
+      const known = [...new Set(S.gym.flatMap((g) => g.ex.map((e) => e.name)))];
+      openSheet('Übung hinzufügen', `<form data-form="gymadd"><label>Name<input name="name" list="exlist" placeholder="z. B. Dips" required></label>
+        <datalist id="exlist">${known.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+        <label class="check-l"><input type="checkbox" name="keep"> Dauerhaft in diesen Split aufnehmen</label><button class="btn full">Hinzufügen</button></form>`);
+    },
     gfinish: () => {
       const done = G.ex.reduce((a, e) => a + e.sets.filter((s) => s.done).length, 0);
       if (!done && !confirm('Kein Satz abgehakt. Trotzdem beenden?')) return;
       const vol = G.ex.reduce((a, e) => a + e.sets.filter((s) => s.done).reduce((b, s) => b + (+s.w || 0) * (+s.r || 0), 0), 0);
-      openSheet('Training beenden', `<p class="muted">${done} Sätze · ${Math.round(vol)} kg Gesamtvolumen · ${Math.max(1, Math.round((Date.now() - G.start) / 60000))} min</p>
+      openSheet('Training beenden', `<p class="muted">${done} Sätze · ${fmtKg(vol)} Gesamtvolumen · ${Math.max(1, Math.round((Date.now() - G.start) / 60000))} min</p>
         <form data-form="gymfinish"><label>Wie anstrengend war es? <output id="rpeout">6</output>/10<input type="range" name="rpe" min="1" max="10" value="6" oninput="document.getElementById('rpeout').textContent=this.value"></label>
         <button class="btn full">Speichern</button></form>`);
     },
+    gsession: () => {
+      const g = S.gym.find((x) => String(x.id) === D.id);
+      if (!g) return;
+      openSheet(`${S.settings.gymSplits[g.split] ? S.settings.gymSplits[g.split].name : 'Gym'} · ${fmtShort(parseISO(g.date))}`,
+        `<p class="muted">${g.min} min · ${fmtKg(tonnage(g))}</p>${g.ex.map((e) => `<div class="gline"><b>${esc(e.name)}</b><span>${e.sets.map((s) => `${s.w}×${s.r}`).join(' · ')}</span></div>`).join('')}
+        <div class="row"><button class="ghost danger" data-act="gdel" data-id="${g.id}">Löschen</button><button class="ghost" data-act="close">Schließen</button></div>`);
+    },
+    gdel: () => {
+      if (!confirm('Dieses Gym-Training löschen?')) return;
+      S.gym = S.gym.filter((x) => String(x.id) !== D.id);
+      persist(); closeSheet(); refresh();
+    },
+    gnext: () => startGym(D.date, D.split),
   };
 }
 
@@ -86,15 +147,34 @@ document.addEventListener('input', (ev) => {
 });
 
 document.addEventListener('submit', (ev) => {
+  const add = ev.target.closest('form[data-form="gymadd"]');
+  if (add && G) {
+    ev.preventDefault();
+    const fd = Object.fromEntries(new FormData(add));
+    const name = fd.name.trim();
+    if (!name) return;
+    G.ex.push(makeEx(name, null));
+    if (fd.keep) { const sp = S.settings.gymSplits[G.split]; if (!sp.ex.includes(name)) { sp.ex.push(name); persist(); } }
+    closeSheet(); renderGym();
+    return;
+  }
   const f = ev.target.closest('form[data-form="gymfinish"]');
   if (!f || !G) return;
   ev.preventDefault();
   const rpe = +new FormData(f).get('rpe');
   const min = Math.max(1, Math.round((Date.now() - G.start) / 60000));
   const ex = G.ex.map((e) => ({ name: e.name, sets: e.sets.filter((s) => s.done || (s.w && s.r)).map((s) => ({ w: +s.w || 0, r: +s.r || 0 })) })).filter((e) => e.sets.length);
-  S.gym.push({ date: G.date, split: G.split, ex, min });
-  S.log.push({ id: Date.now(), date: G.date, sport: 'Gym', min, km: 0, rpe });
+  // Rekorde: bester geschaetzter Max-Wert vor und nach diesem Training
+  const before = exerciseHistory();
+  const prs = [];
+  ex.forEach((e) => {
+    const now = Math.max(0, ...e.sets.map((s) => e1rm(s.w, s.r)));
+    const old = Math.max(0, ...(before[e.name] || []).map((x) => x.e1));
+    if (old > 0 && now > old + 0.5) prs.push(e.name);
+  });
+  S.gym.push({ id: Date.now(), date: G.date, split: G.split, ex, min });
+  S.log.push({ id: Date.now() + 1, date: G.date, sport: 'Gym', min, km: 0, rpe, rpeManual: 1 });
   G = null; clearInterval(gymTick);
   persist(); closeSheet(); renderGym(); refresh();
-  toast('Gym gespeichert. Beim nächsten Mal siehst du deine Werte.');
+  toast(prs.length ? `Neuer Rekord: ${prs.slice(0, 2).join(', ')} 🎉` : 'Gym gespeichert. Beim nächsten Mal siehst du deine Werte.');
 });

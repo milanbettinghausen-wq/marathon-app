@@ -1,0 +1,11 @@
+name = "marathon-strava"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+APP_ORIGIN = "https://milanbettinghausen-wq.github.io"
+APP_URL = "https://milanbettinghausen-wq.github.io/marathon-app/"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "SET_BY_SETUP"

@@ -1,13 +1,15 @@
 // Start
 refresh();
-// Mitternacht und Rueckkehr in die App: Ansicht aktualisieren
+stravaBoot();
+
+// Zurueck in der App: Ansicht auffrischen und Strava abgleichen
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    if (!$('#sheet').classList.contains('open') && !G) {
-      const T = iso(todayDate());
-      if (ui.tab === 'today' && ui.sel < T && !ui.touched) ui.sel = T;
-      refresh();
-    }
-  }
+  if (document.visibilityState !== 'visible') return;
+  if (!$('#sheet').classList.contains('open') && !G) refresh();
+  autoSync();
 });
+// Solange die App offen ist: alle 5 Minuten abgleichen, Zeitangabe mitlaufen lassen
+setInterval(() => { if (document.visibilityState === 'visible') autoSync(); }, 5 * 60 * 1000);
+setInterval(() => updateSyncUI(), 30 * 1000);
+
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

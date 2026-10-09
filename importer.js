@@ -41,16 +41,7 @@ function secs(v) {
   if (s.includes(':')) { const t = parseHMS(s); return isNaN(t) ? NaN : t; }
   return num(s);
 }
-function sportOfStrava(t) {
-  t = String(t).toLowerCase();
-  if (/run|lauf|jogg/.test(t)) return 'Laufen';
-  if (/ride|rad|bike|cycl/.test(t)) return 'Radfahren';
-  if (/swim|schwimm/.test(t)) return 'Schwimmen';
-  if (/soccer|football|fu(ß|ss)ball/.test(t)) return 'Fußball';
-  if (/weight|kraft|workout|gym|crossfit|hiit/.test(t)) return 'Gym';
-  return null;
-}
-const DEFAULT_RPE = { Laufen: 5, Radfahren: 4, Schwimmen: 5, Fußball: 7, Gym: 6 };
+const DEFAULT_RPE = { Laufen: 5, Radfahren: 4, Schwimmen: 5, Fußball: 7, Gym: 6, Spazieren: 2, Wandern: 3, Yoga: 2, Pilates: 2 };
 
 function importStrava(text) {
   const rows = parseCSV(text);
@@ -69,9 +60,9 @@ function importStrava(text) {
   let added = 0, dup = 0, ignored = 0;
   const fresh = [];
   rows.slice(1).forEach((r) => {
-    const sport = sportOfStrava(r[iType]);
+    const sport = sportFromStrava(r[iType]);
     const date = parseStravaDate(r[iDate]);
-    if (!sport || !date) { ignored++; return; }
+    if (!date) { ignored++; return; }
     let sec = NaN;
     for (const i of iTime) { const v = secs(r[i]); if (!isNaN(v) && v > 0) { sec = v; break; } }
     if (isNaN(sec)) { ignored++; return; }
@@ -83,11 +74,11 @@ function importStrava(text) {
     const key = `${date}|${sport}|${min}`;
     if (have.has(key)) { dup++; return; }
     have.add(key);
-    fresh.push({ id: Date.now() + added, date, sport, min, km: sport === 'Laufen' || sport === 'Radfahren' || sport === 'Schwimmen' ? Math.round(km * 100) / 100 : 0, rpe: sport === 'Laufen' && km >= 18 ? 6 : DEFAULT_RPE[sport], src: 'strava' });
+    fresh.push({ id: Date.now() + added, date, sport, min, km: sport === 'Gym' || sport === 'Fußball' ? 0 : Math.round(km * 100) / 100, rpe: sport === 'Laufen' && km >= 18 ? 6 : (DEFAULT_RPE[sport] || 4), src: 'strava' });
     added++;
   });
   if (!added) { toast(`Nichts Neues (${dup} schon vorhanden, ${ignored} ignoriert)`); return; }
-  if (!confirm(`${added} Aktivitäten importieren? (${dup} schon vorhanden, ${ignored} nicht passende ignoriert, z. B. Spaziergänge)`)) return;
+  if (!confirm(`${added} Aktivitäten importieren? (${dup} schon vorhanden, ${ignored} nicht lesbar)`)) return;
   S.log.push(...fresh);
   persist(); refresh();
   toast(`${added} Aktivitäten importiert. Plan neu berechnet.`);
