@@ -58,10 +58,16 @@ function parseCoach(raw) {
     }
   }
 
-  if (/krank|erkältet|erkaeltet|grippe|fieber|halsschmerz|magen|durchfall/.test(t)) {
+  const mildCold = /schnupfen|verstopfte nase|leichte erkältung|leichte erkaeltung|leicht erkältet|leicht erkaeltet/.test(t) && !/fieber|glieder|husten|grippe|schwer|schlapp|krank|halsschmerz|magen|durchfall/.test(t);
+  if (mildCold) {
+    const days = parseDays(t, 3);
+    out.notes.push(mk('Schnupfen', days, { kind: 'cold', kmF: 0.5, noQ: true, paceAdd: 20, ballWarn: 'Nur locker mitmachen.' }));
+    out.bullets.push(`Leichter Schnupfen, ${days} Tage: nur lockere, kurze Läufe (halbe Strecke, kein Tempo). Bei Fieber, Husten oder Gliederschmerzen schreib mir „krank", dann gibt es Pause.`);
+    hit = true;
+  } else if (/krank|erkältet|erkaeltet|grippe|fieber|halsschmerz|magen|durchfall/.test(t)) {
     const days = parseDays(t, 4);
     out.notes.push(mk('krank', days, { kind: 'sick', kmF: 0, ballWarn: 'Lieber aussetzen.', gymWarn: 'Lieber frei.' }));
-    out.bullets.push(`Krank, ${days} Tage: kein Training. Danach langsam wieder einsteigen.`);
+    out.bullets.push(`Krank, ${days} Tage: komplett Pause, auch kein Rad und kein Schwimmen. Danach zwei Tage sanfter Wiedereinstieg mit kürzeren, lockeren Einheiten.`);
     hit = true;
   }
   if (/müde|muede|schlapp|erschöpft|erschoepft|schlecht geschlafen|kaputt/.test(t) && !out.notes.some((n) => n.kind === 'sick')) {

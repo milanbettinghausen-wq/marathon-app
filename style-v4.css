@@ -1,0 +1,28 @@
+/* Ernaehrung, Barcode-Scanner, Uebungsauswahl */
+.kcalcard { display: flex; gap: 16px; align-items: center; background: linear-gradient(150deg, rgba(255,122,89,.16), var(--s1) 65%); }
+.kc-r { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.mac-h { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); margin-bottom: 4px; }
+.mac-h b { color: var(--text); font-weight: 700; }
+.mac-b { height: 8px; border-radius: 5px; background: rgba(255,255,255,.08); overflow: hidden; }
+.mac-b i { display: block; height: 100%; border-radius: 5px; transition: width .6s ease; }
+.tgline { margin: -2px 4px 12px; font-size: .8rem; }
+.faddrow { margin: 4px 0 6px; } .faddrow .btn { flex: 2; } .faddrow .ghost { flex: 1; }
+.meal { padding: 12px 14px; }
+.meal-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.meal-h small { display: block; }
+.ent { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 9px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.ent span { min-width: 0; } .ent small { display: block; } .ent b { font-variant-numeric: tabular-nums; }
+.fsearch { margin: 0 0 4px !important; }
+.fres { margin-top: 6px; }
+.fr { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 11px 2px; border-top: 1px solid var(--line); cursor: pointer; }
+.fr span { min-width: 0; } .fr small { display: block; } .fr i { color: var(--bike); font-style: normal; }
+.wline { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; } .wline b { font-size: 1.5rem; } .wline small { flex: 1; }
+.drow { display: grid; grid-template-columns: 120px 1fr 70px; gap: 10px; align-items: center; padding: 6px 0; font-size: .85rem; } .drow b { text-align: right; }
+.ing { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); } .ing small { display: block; }
+#scanview { position: fixed; inset: 0; z-index: 70; background: #000; display: flex; flex-direction: column; }
+#scanview video { flex: 1; width: 100%; object-fit: cover; min-height: 0; }
+.scanframe { position: absolute; left: 12%; right: 12%; top: 22%; height: 22%; border: 3px solid var(--run); border-radius: 18px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.45); pointer-events: none; }
+.scanbar { padding: 14px 16px calc(18px + env(safe-area-inset-bottom)); background: #0b121a; display: flex; flex-direction: column; gap: 10px; }
+.scanbar p { margin: 0; color: var(--muted); text-align: center; font-size: .9rem; }
+.exgroups { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+.exlist { max-height: 46vh; overflow: auto; }

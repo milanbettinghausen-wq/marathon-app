@@ -243,10 +243,11 @@ function viewGym() {
     <div class="gh-w">${[...Array(gymPlan)].map((_, i) => `<i class="${i < gymDone ? 'on' : ''}"></i>`).join('')}<small>${gymDone} von ${gymPlan} diese Woche</small></div>
   </div>
   ${splitCard('A')}${splitCard('B')}
+  <div class="card splitc"><div class="sc-h"><div><p class="eyebrow">Frei</p><b>Freies Training</b></div></div><p class="muted">Stelle dein Training aus über 80 Übungen nach Muskelgruppe zusammen, ohne Vorlage.</p><button class="btn full" data-act="gfree" data-date="${T}">Freies Training starten</button></div>
   <div class="card"><h2>Stärke-Fortschritt</h2>${strength || '<p class="muted">Sobald du ein paar Mal trainiert hast, siehst du hier, wie du bei jeder Übung stärker wirst.</p>'}
     ${strength ? '<p class="muted">„Geschätztes Maximum" ist eine Rechnung aus Gewicht und Wiederholungen (Epley). Pfeile zeigen die Veränderung zu vor ein paar Einheiten.</p>' : ''}</div>
   <div class="card"><h2>Bewegtes Gewicht pro Woche</h2>${barChart(weeks.map((w) => ({ label: w.label, v: w.v, cur: w.cur, txt: w.v ? r1(w.v) : '' })))}<p class="legend">in Tonnen</p></div>
-  <div class="card"><h2>Letzte Einheiten</h2>${sessions.map((g) => `<button class="log" data-act="gsession" data-id="${g.id}"><span class="lg-i">🏋️</span><div><b>${esc(S.settings.gymSplits[g.split] ? S.settings.gymSplits[g.split].name : 'Gym')}</b><small>${fmtShort(parseISO(g.date))} · ${g.ex.reduce((a, e) => a + e.sets.length, 0)} Sätze · ${fmtKg(tonnage(g))}</small></div></button>`).join('') || '<p class="muted">Noch nichts gespeichert.</p>'}</div>`;
+  <div class="card"><h2>Letzte Einheiten</h2>${sessions.map((g) => `<button class="log" data-act="gsession" data-id="${g.id}"><span class="lg-i">🏋️</span><div><b>${esc(S.settings.gymSplits[g.split] ? S.settings.gymSplits[g.split].name : 'Freies Training')}</b><small>${fmtShort(parseISO(g.date))} · ${g.ex.reduce((a, e) => a + e.sets.length, 0)} Sätze · ${fmtKg(tonnage(g))}</small></div></button>`).join('') || '<p class="muted">Noch nichts gespeichert.</p>'}</div>`;
 }
 
 // ---------- PLAN ----------
@@ -363,16 +364,6 @@ function recoveryCard() {
   return `<div class="card"><p class="eyebrow">Erholung laut Garmin · ${fmtShort(parseISO(rec.date))}</p>
     <div class="tiles">${t(l.sleep, ' h', 'Schlaf')}${t(l.rhr, '', 'Ruhepuls')}${t(l.hrv, '', 'HRV')}</div>
     <p class="muted" style="margin:10px 0 0">${rec.flags.length ? `Auffällig: ${rec.flags.join(', ')}.` : 'Alles im Normalbereich deiner letzten Wochen.'}</p></div>`;
-}
-
-function viewFood() {
-  return `${pageTop('Phase 3', 'Essen')}
-  <div class="card hero-food"><h2>Kommt als Nächstes</h2><p>So wird der Ernährungstracker, orientiert an den besten Apps:</p>
-  <ul class="feat"><li><b>Barcode-Scanner</b> mit Open Food Facts für Produkte im Supermarkt</li>
-  <li><b>Schnelles Loggen</b> wie bei MacroFactor: Suche, zuletzt gegessen, Favoriten, Schnell-Kalorien</li>
-  <li><b>Eigene Gerichte</b> aus Zutaten berechnet, plus Standardgerichte</li>
-  <li><b>Tagesringe</b> für Kalorien, Eiweiß, Kohlenhydrate, Fett, Details für alle Nährwerte</li>
-  <li><b>Kalorien-Ziel, das mitwächst</b>: mehr Training, mehr Budget, Verbrauch aus Strava</li></ul></div>`;
 }
 
 // ---------- EINSTELLUNGEN ----------
@@ -602,6 +593,7 @@ document.addEventListener('click', (ev) => {
       location.reload();
     },
     ...gymHandlers(D),
+    ...foodHandlers(D),
   };
   if (handlers[a]) handlers[a]();
 });
@@ -663,7 +655,7 @@ document.addEventListener('change', async (ev) => {
 
 function exportData() {
   const copy = { ...S.settings, worker: { url: '', key: '' } };
-  const blob = new Blob([JSON.stringify({ v: 3, settings: copy, log: S.log, ov: S.ov, checkin: S.checkin, gym: S.gym, notes: S.notes, wellness: S.wellness }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ v: 3, settings: copy, log: S.log, ov: S.ov, checkin: S.checkin, gym: S.gym, notes: S.notes, wellness: S.wellness, food: S.food, foods: S.foods, fav: S.fav, body: S.body }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `marathon-sicherung-${iso(new Date())}.json`;
@@ -676,7 +668,7 @@ function importData(text) {
     if (!confirm(`Aktuelle Daten durch die Sicherung (${d.log.length} Einträge) ersetzen?`)) return;
     const w = S.settings.worker;
     S.settings = { ...DEFAULT_SETTINGS, ...d.settings, worker: w }; S.log = d.log; S.ov = d.ov || { skip: {}, extra: {} };
-    S.checkin = d.checkin || {}; S.gym = d.gym || []; S.notes = d.notes || []; S.wellness = d.wellness || {};
+    S.checkin = d.checkin || {}; S.gym = d.gym || []; S.notes = d.notes || []; S.wellness = d.wellness || {}; S.food = d.food || []; S.foods = d.foods || []; S.fav = d.fav || {}; S.body = d.body || [];
     persist(); refresh(); toast('Sicherung eingespielt');
   } catch { toast('Die Datei konnte nicht gelesen werden'); }
 }

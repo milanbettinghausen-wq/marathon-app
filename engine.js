@@ -57,8 +57,13 @@ function activeStreak() {
 // ---------- Hinweise aus dem Schreib-Coach ----------
 function notesOn(d) { return S.notes.filter((n) => n.from <= d && n.until >= d); }
 function noteEffect(d) {
-  const ns = notesOn(d);
-  const e = { ns, kmF: 1, noQ: false, pace: 0, gymWarn: '', ballWarn: '', reasons: [] };
+  const ns = notesOn(d).slice();
+  // Zwei Tage nach einer Krankheit: sanfter Wiedereinstieg
+  const back = S.notes.find((n) => n.kind === 'sick' && n.until < d && d <= iso(addDays(parseISO(n.until), 2)));
+  if (back && !ns.some((n) => n.kind === 'sick')) {
+    ns.push({ label: 'Wiedereinstieg nach Krankheit', kind: 'comeback', kmF: 0.6, noQ: true, paceAdd: 20, gymWarn: 'Wiedereinstieg: leichte Gewichte, nicht bis zum Muskelversagen.', ballWarn: 'Nur locker mitmachen, wenn du dich wieder ganz fit fühlst.' });
+  }
+  const e = { ns, sick: ns.some((n) => n.kind === 'sick'), kmF: 1, noQ: false, pace: 0, gymWarn: '', ballWarn: '', reasons: [] };
   ns.forEach((n) => {
     e.kmF = Math.min(e.kmF, n.kmF == null ? 1 : n.kmF);
     e.noQ = e.noQ || !!n.noQ;
@@ -235,6 +240,12 @@ function applyNotes(days) {
     const why = eff.reasons.join(', ');
     list.forEach((s) => {
       if (s.done) return;
+      if (eff.sick && s.t !== 'race') {
+        s.restDay = true; s.km = s.t === 'run' ? 0 : s.km;
+        s.adj = `${why}: heute kein Training.`;
+        s.alt = 'Ruh dich richtig aus: viel trinken, früh schlafen. Training kommt erst wieder, wenn du einen Tag lang symptomfrei bist, dann langsam einsteigen.';
+        return;
+      }
       if (s.t === 'run') {
         if (eff.kmF === 0) {
           s.km = 0; s.restDay = true; s.adj = `${why}: kein Lauf.`;
@@ -258,6 +269,12 @@ function applyReadiness(days) {
   if (!ci || ci === 'fit' || !days[T]) return;
   days[T].forEach((s) => {
     if (s.done || s.restDay) return;
+    if (ci === 'sick' && s.t !== 'race') {
+      s.restDay = true; if (s.t === 'run') s.km = 0;
+      s.adj = 'Angeschlagen: heute kein Training.';
+      s.alt = 'Ruh dich aus. Wenn du nur leichten Schnupfen hast, schreib dem Coach „leichter Schnupfen", dann gibt es eine lockere Einheit.';
+      return;
+    }
     if (s.t === 'run') {
       if (ci === 'sick') { s.km = 0; s.restDay = true; s.adj = 'Angeschlagen: heute kein Lauf.'; }
       else { s.role = s.role === 'quality' ? 'easy' : s.role; s.km = Math.max(3, Math.round(s.km * 0.8)); s.adj = 'Müde: lockerer und etwa 20 Prozent kürzer.'; }
@@ -275,6 +292,7 @@ function describe(s, m) {
   const P = paces(s.paceAdd || 0);
   const wo = m ? m.wo : 20;
   const maintain = m && m.maintain;
+  if (s.restDay) { s.title = 'Pause'; s.detail = s.alt || 'Ruh dich aus. Wenn es besser ist, geht es morgen normal weiter.'; s.est = s.est || { min: 0, rpe: 1 }; return; }
   if (s.t === 'football') {
     s.title = s.n || 'Fußball';
     s.detail = `${s.min} min · Anstrengung etwa ${s.rpe}/10${m && m.wo === 0 ? ' · In der Rennwoche lieber locker.' : ''}`;

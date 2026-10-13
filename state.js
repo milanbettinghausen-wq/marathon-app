@@ -1,5 +1,5 @@
 // Zustand und Speicher. Alles liegt nur auf dem Geraet (localStorage).
-const KEYS = { settings: 'mar2.settings', log: 'mar2.log', ov: 'mar2.ov', checkin: 'mar2.checkin', gym: 'mar2.gym', notes: 'mar2.notes', wellness: 'mar2.wellness' };
+const KEYS = { settings: 'mar2.settings', log: 'mar2.log', ov: 'mar2.ov', checkin: 'mar2.checkin', gym: 'mar2.gym', notes: 'mar2.notes', wellness: 'mar2.wellness', food: 'mar2.food', foods: 'mar2.foods', fav: 'mar2.fav', body: 'mar2.body' };
 
 const SPORTS = {
   run: { name: 'Laufen', icon: '🏃', color: 'var(--run)' },
@@ -61,6 +61,7 @@ const DEFAULT_SETTINGS = {
   maintainKm: 25,     // Wunsch-Wochenkilometer im Modus "fit bleiben"
   maxHR: 195,         // Maximalpuls, wird fuer die Anstrengung aus dem Puls gebraucht
   worker: { url: '', key: '' },
+  profile: null,      // Gewicht, Groesse, Alter fuer das Kalorienziel
   syncAt: 0,
   week: [
     [{ t: 'football', n: 'Fußball-Training', min: 90, rpe: 6, fixed: 1 }],
@@ -85,13 +86,17 @@ const S = {
   gym: store.get(KEYS.gym, []),
   notes: store.get(KEYS.notes, []),
   wellness: store.get(KEYS.wellness, {}),
+  food: store.get(KEYS.food, []),
+  foods: store.get(KEYS.foods, []),
+  fav: store.get(KEYS.fav, {}),
+  body: store.get(KEYS.body, []),
 };
 S.settings.worker = { ...DEFAULT_SETTINGS.worker, ...(S.settings.worker || {}) };
 
 function persist() {
   const ok = [
     store.set(KEYS.settings, S.settings), store.set(KEYS.log, S.log), store.set(KEYS.ov, S.ov),
-    store.set(KEYS.checkin, S.checkin), store.set(KEYS.gym, S.gym), store.set(KEYS.notes, S.notes), store.set(KEYS.wellness, S.wellness),
+    store.set(KEYS.checkin, S.checkin), store.set(KEYS.gym, S.gym), store.set(KEYS.notes, S.notes), store.set(KEYS.wellness, S.wellness), store.set(KEYS.food, S.food), store.set(KEYS.foods, S.foods), store.set(KEYS.fav, S.fav), store.set(KEYS.body, S.body),
   ].every(Boolean);
   if (!ok) toast('Speichern nicht möglich (privater Modus?)');
 }

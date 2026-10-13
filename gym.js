@@ -72,7 +72,7 @@ function makeEx(name, prevSession) {
 function renderGym() {
   const el = $('#gymview');
   if (!G) { el.classList.remove('open'); el.innerHTML = ''; return; }
-  const sp = S.settings.gymSplits[G.split];
+  const sp = S.settings.gymSplits[G.split] || { name: 'Freies Training' };
   el.innerHTML = `<div class="gtop"><button class="chip" data-act="gclose">✕</button><div><b>${esc(sp.name)}</b><small id="gtime">0:00</small></div><button class="btn sm" data-act="gfinish">Beenden</button></div>
   <div class="gbody">${G.ex.map((e, ei) => `<div class="card gex"><h2>${esc(e.name)}</h2>
     ${e.last ? `<p class="muted">Letztes Mal: ${e.last.map((s) => `${s.w}×${s.r}`).join(' · ')}</p>` : '<p class="muted">Noch keine Vorwerte</p>'}
@@ -99,6 +99,34 @@ function tickGym() {
   }
 }
 
+function startGymFree(date) {
+  G = { date, split: 'F', start: Date.now(), restEnd: 0, ex: [] };
+  renderGym();
+  clearInterval(gymTick);
+  gymTick = setInterval(tickGym, 1000);
+  openExercisePicker();
+}
+
+// Uebungsbibliothek: nach Muskelgruppe waehlen oder suchen
+let exGroup = 'Alle';
+function exerciseListHTML(q) {
+  const n = norm(q || '');
+  const used = new Set(G ? G.ex.map((e) => e.name) : []);
+  const known = [...new Set(S.gym.flatMap((g) => g.ex.map((e) => e.name)))];
+  let list = EXERCISES.slice();
+  known.forEach((k) => { if (!list.find((x) => x.name === k)) list.push({ name: k, group: 'Eigene' }); });
+  if (exGroup !== 'Alle') list = list.filter((x) => x.group === exGroup);
+  if (n) list = list.filter((x) => norm(x.name).includes(n));
+  return list.slice(0, 60).map((x) => `<button class="fr" data-act="gpick" data-name="${esc(x.name)}"><span>${esc(x.name)}<small>${esc(x.group)}</small></span>${used.has(x.name) ? '<i>✓</i>' : ''}</button>`).join('') || '<p class="muted">Nichts gefunden. Tippe den Namen oben ein und wähle „Eigene Übung".</p>';
+}
+function openExercisePicker() {
+  const groups = ['Alle', ...new Set(EXERCISES.map((x) => x.group))];
+  openSheet('Übung auswählen', `<input id="exq" class="fsearch" placeholder="Übung suchen oder eigenen Namen tippen …" autocomplete="off">
+    <div class="exgroups">${groups.map((g) => `<button class="chip${g === exGroup ? ' on' : ''}" data-act="gexgroup" data-g="${esc(g)}">${esc(g)}</button>`).join('')}</div>
+    <div class="exlist" id="exlist">${exerciseListHTML('')}</div>
+    <button class="addrow" data-act="gexown">+ Eigene Übung mit diesem Namen</button>`);
+}
+
 function gymHandlers(D) {
   return {
     gclose: () => { if (confirm('Training abbrechen? Eingaben gehen verloren.')) { G = null; clearInterval(gymTick); renderGym(); } },
@@ -109,11 +137,27 @@ function gymHandlers(D) {
       if (s.done) G.restEnd = Date.now() + 90000;
       renderGym();
     },
-    gaddex: () => {
-      const known = [...new Set(S.gym.flatMap((g) => g.ex.map((e) => e.name)))];
-      openSheet('Übung hinzufügen', `<form data-form="gymadd"><label>Name<input name="name" list="exlist" placeholder="z. B. Dips" required></label>
-        <datalist id="exlist">${known.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
-        <label class="check-l"><input type="checkbox" name="keep"> Dauerhaft in diesen Split aufnehmen</label><button class="btn full">Hinzufügen</button></form>`);
+    gaddex: () => openExercisePicker(),
+    gfree: () => startGymFree(D.date || iso(todayDate())),
+    gexgroup: () => {
+      exGroup = D.g;
+      $$('.exgroups .chip').forEach((b) => b.classList.toggle('on', b.dataset.g === exGroup));
+      $('#exlist').innerHTML = exerciseListHTML(($('#exq') || {}).value);
+    },
+    gpick: () => {
+      if (!G) return;
+      if (!G.ex.find((e) => e.name === D.name)) G.ex.push(makeEx(D.name, null));
+      renderGym();
+      const b = document.querySelector(`#exlist [data-name="${CSS.escape(D.name)}"]`);
+      if (b && !b.querySelector('i')) b.insertAdjacentHTML('beforeend', '<i>✓</i>');
+      toast(`${D.name} hinzugefügt`);
+    },
+    gexown: () => {
+      const v = ($('#exq') || {}).value || '';
+      const name = v.trim();
+      if (!name) { toast('Tippe oben erst einen Namen ein'); return; }
+      if (G && !G.ex.find((e) => e.name === name)) G.ex.push(makeEx(name, null));
+      renderGym(); closeSheet();
     },
     gfinish: () => {
       const done = G.ex.reduce((a, e) => a + e.sets.filter((s) => s.done).length, 0);
@@ -140,6 +184,7 @@ function gymHandlers(D) {
 }
 
 document.addEventListener('input', (ev) => {
+  if (ev.target.id === 'exq') { const l = $('#exlist'); if (l) l.innerHTML = exerciseListHTML(ev.target.value); return; }
   const k = ev.target.dataset && ev.target.dataset.gw;
   if (!k || !G) return;
   const [ei, si, f] = k.split('.');
