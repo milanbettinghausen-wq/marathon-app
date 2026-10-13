@@ -32,3 +32,15 @@
 .catb span { font-size: 1.3rem; } .catb small { color: var(--muted); font-weight: 500; }
 .fr.sg b { background: var(--ball); color: #2a0c04; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: none; }
 .src { font-size: .72rem; margin: 6px 4px 0; }
+
+.sess-tip { color: var(--bike); font-size: .8rem; margin-top: 6px; line-height: 1.35; }
+.mh-b { display: flex; gap: 6px; align-items: center; }
+.glasses { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.glasses i { width: 22px; height: 28px; border-radius: 6px 6px 9px 9px; background: rgba(255,255,255,.08); border: 1px solid var(--line); }
+.glasses i.on { background: linear-gradient(var(--swim), #1c7aa0); border-color: var(--swim); }
+.setup .stp { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.setup .stp > div { flex: 1; } .setup .stp small { display: block; }
+.stp-i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); font-weight: 800; flex: none; }
+.stp.ok .stp-i { background: var(--run); color: #04140e; } .stp.ok { opacity: .6; }
+
+.setup { padding: 10px 14px; } .setup > .stp:first-child { border-top: 0; padding: 4px 0; } .setup .stp-i { min-width: 34px; font-size: .75rem; }

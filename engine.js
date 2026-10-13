@@ -310,6 +310,7 @@ function describe(s, m) {
     s.title = 'Haspa Marathon Hamburg';
     s.detail = `Ziel ${fmtHMS(st.goalSec)}, Pace ${P.mp} min/km. Die ersten 10 km eher zu langsam als zu schnell.`;
     s.km = 42.2; s.est = { min: Math.round(st.goalSec / 60), rpe: 9 };
+    s.tip = 'Etwa 60 g Kohlenhydrate pro Stunde ab Minute 30, an jeder Verpflegungsstelle trinken. Nichts Neues am Renntag ausprobieren.';
   } else if (s.t === 'run') {
     const km = s.km || 0;
     s.est = { min: Math.round(km * (P.mpSec * 1.2 + (s.paceAdd || 0)) / 60), rpe: 5 };
@@ -320,6 +321,7 @@ function describe(s, m) {
       s.title = 'Langer Lauf';
       s.detail = `${km} km ruhig (${P.easy} min/km)${mpKm ? `, die letzten ${mpKm} km in Marathonpace (${P.mp})` : ''}`;
       s.est.rpe = 6;
+      if (s.est.min >= 70 || km >= 14) s.tip = 'Ab Minute 45 bis 60 alle 30 Minuten Kohlenhydrate (Gel, Banane, Sportgetränk), etwa 30 bis 60 g pro Stunde, dazu trinken. Frühstück 2 bis 3 Stunden vorher. Teste das im Training, nicht erst im Rennen.';
     } else if (s.role === 'quality' && km >= 5) {
       const kind = maintain ? ['intervals', 'tempo', 'fartlek', 'tempo'][m.q % 4] : QUALITY_ORDER(wo)[wo % 4];
       const wc = km >= 8 ? 2 : 1.5;

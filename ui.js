@@ -126,6 +126,7 @@ function sessionCard(s) {
       <div class="sess-t"><span>${esc(s.title)}</span>${km}</div>
       <div class="sess-d">${esc(s.detail)}</div>
       ${s.adj ? `<div class="sess-n">↻ ${esc(s.adj)}</div>` : ''}
+      ${s.tip && !s.done ? `<div class="sess-tip">⚡ ${esc(s.tip)}</div>` : ''}
       ${s.warn ? `<div class="sess-w">⚠ ${esc(s.warn)}</div>` : ''}
       ${doneInfo ? `<div class="sess-ok">Erledigt · ${esc(doneInfo)}</div>` : ''}
       <div class="sess-a">${acts}</div>
@@ -199,6 +200,8 @@ function viewToday() {
   ${skipped ? `<button class="link" data-act="restore" data-d="${ui.sel}">${skipped} übersprungen · wiederherstellen</button>` : ''}
   <button class="addrow" data-act="add-day" data-d="${ui.sel}">+ Einheit hinzufügen</button>
 
+  ${setupCard()}${backupNudge()}
+  ${coach ? coachCard(coach) : ''}
   <div class="card weekcard">
     ${ring(expected ? done / expected : 0, 'var(--run)', `<strong>${r1(done)}</strong><small>von ${Math.round(expected)} km</small>`)}
     <div class="weekstats">
@@ -208,8 +211,48 @@ function viewToday() {
       <div><b>${Math.round(S.log.filter((e) => e.date >= monISO && e.date <= iso(addDays(mon, 6))).reduce((a, e) => a + e.min, 0))}</b><small>min Training</small></div>
     </div>
   </div>
-  ${coach ? coachCard(coach) : ''}
   ${!wcfg() && S.log.length < 5 ? '<div class="card nudge"><h2>Mehr Genauigkeit mit Garmin</h2><p>Verbinde Garmin über Intervals.icu, dann startet der Plan auf deinem echten Niveau, neue Aktivitäten erscheinen automatisch und du siehst Schlaf und Ruhepuls.</p><button class="btn" data-act="tab" data-k="more">Garmin einrichten</button></div>' : ''}`;
+}
+
+function setupCard() {
+  const st = S.settings, su = st.setup || {};
+  if (su.hide) return '';
+  const steps = [
+    [!!(st.profile && st.profile.kg), 'Gewicht, Größe, Alter eintragen', 'Damit rechne ich dein Kalorienziel.', 'f-profile', 'Eintragen'],
+    [!!wcfg(), 'Garmin verbinden', 'Aktivitäten und Erholungsdaten kommen automatisch.', 'tab', 'Einrichten', 'more'],
+    [!!su.week, 'Wochenstruktur prüfen', 'Fußball, Gym und Läufe auf deine Tage legen.', 'setup-week', 'Ansehen'],
+    [!!su.gym, 'Gym-Übungen prüfen', 'Split A und B mit deinen Übungen füllen.', 'setup-gym', 'Ansehen'],
+  ];
+  const done = steps.filter((x) => x[0]).length;
+  if (done === steps.length) return '';
+  const next = steps.find((x) => !x[0]);
+  const btn = (x) => `<button class="chip" data-act="${x[3]}"${x[5] ? ` data-k="${x[5]}"` : ''}>${x[4]}</button>`;
+  return `<div class="card setup"><div class="stp"><span class="stp-i">${done}/${steps.length}</span><div><b>${next[1]}</b><small>${next[2]}</small></div>${btn(next)}</div>
+    <details><summary>Alle Schritte</summary>${steps.map((x) => `<div class="stp${x[0] ? ' ok' : ''}"><span class="stp-i">${x[0] ? '✓' : '○'}</span><div><b>${x[1]}</b></div>${x[0] ? '' : btn(x)}</div>`).join('')}
+      <button class="link" data-act="setup-hide">Ausblenden</button></details></div>`;
+}
+function backupNudge() {
+  const old = Date.now() - (S.settings.lastExport || 0) > 30 * 86400000;
+  if (!(S.log.length >= 15 && old)) return '';
+  return '<div class="card nudge"><div class="meal-h"><div><b>Sicherung fällig</b><small>Deine Daten liegen nur auf diesem Handy.</small></div><button class="btn sm" data-act="export">Sichern</button></div></div>';
+}
+
+function weekRecap() {
+  const T = todayDate(), from = iso(addDays(T, -6)), to = iso(T);
+  const logs = S.log.filter((e) => e.date >= from && e.date <= to);
+  if (logs.length < 2) return '';
+  const km = logs.filter((e) => e.sport === 'Laufen').reduce((a, e) => a + (e.km || 0), 0);
+  const mins = logs.reduce((a, e) => a + e.min, 0);
+  const gyms = S.gym.filter((g) => g.date >= from && g.date <= to);
+  const ton = gyms.reduce((a, g) => a + tonnage(g), 0);
+  const fd = {};
+  S.food.filter((e) => e.date >= from && e.date <= to).forEach((e) => { fd[e.date] = (fd[e.date] || 0) + e.k; });
+  const days = Object.values(fd).filter((v) => v > 500);
+  const avgK = days.length ? Math.round(days.reduce((a, b) => a + b, 0) / days.length) : 0;
+  const sports = [...new Set(logs.map((e) => e.sport))];
+  return `<div class="card"><p class="eyebrow">Letzte 7 Tage</p>
+    <div class="tiles"><div><b>${logs.length}</b><small>Einheiten</small></div><div><b>${r1(km)}</b><small>km gelaufen</small></div><div><b>${Math.round(mins / 60 * 10) / 10}</b><small>Stunden</small></div></div>
+    <p class="muted" style="margin:10px 0 0">${sports.join(', ')}${gyms.length ? ` · Gym ${gyms.length}x, ${fmtKg(ton)} bewegt` : ''}${avgK ? ` · Ø ${avgK} kcal gegessen (${days.length} Tage geloggt)` : ''}.</p></div>`;
 }
 
 // ---------- GYM ----------
@@ -346,6 +389,7 @@ function viewForm() {
       <p class="legend"><i style="background:var(--swim)"></i>Fitness (letzte Wochen) <i style="background:var(--ball)"></i>Ermüdung (letzte Tage)</p>
       <div class="tiles"><div><b>${Math.round(f.ctl)}</b><small>Fitness</small></div><div><b>${Math.round(f.atl)}</b><small>Ermüdung</small></div><div><b>${enough ? (tsb > 0 ? '+' : '') + Math.round(tsb) : '–'}</b><small>Frische</small></div></div>
       <p class="muted">Berechnet aus Dauer mal Anstrengung (bei Strava aus dem Puls). Frische = Fitness minus Ermüdung.</p></details></div>
+  ${weekRecap()}
   ${recoveryCard()}
   <div class="tiles4 card"><div><b>${r1(runKm(thisMon, addDays(thisMon, 6)))}</b><small>km diese Woche</small></div>
     <div><b>${Math.round(M.A * 10) / 10}</b><small>km Schnitt/Woche</small></div><div><b>${avgPace}</b><small>Ø Pace /km (4 Wo.)</small></div></div>
@@ -542,7 +586,15 @@ document.addEventListener('click', (ev) => {
     gym: () => startGym(D.date, D.split),
     newlog: () => openLog({ date: D.date || iso(todayDate()), sport: 'Laufen', min: '', km: '', rpe: 5 }),
     editlog: () => { const e = S.log.find((x) => String(x.id) === D.id); if (e) openLog(e, 'Eintrag bearbeiten'); },
-    dellog: () => { S.log = S.log.filter((x) => String(x.id) !== D.id); persist(); closeSheet(); refresh(); toast('Eintrag gelöscht'); },
+    dellog: () => {
+      const old = S.log.find((x) => String(x.id) === D.id);
+      S.log = S.log.filter((x) => String(x.id) !== D.id);
+      persist(); closeSheet(); refresh();
+      toast('Eintrag gelöscht', 'Rückgängig', () => { if (old) { S.log.push(old); persist(); refresh(); } });
+    },
+    'setup-week': () => { S.settings.setup = { ...S.settings.setup, week: true }; persist(); ui.tab = 'more'; render(); window.scrollTo(0, 0); },
+    'setup-gym': () => { S.settings.setup = { ...S.settings.setup, gym: true }; persist(); ui.tab = 'gym'; render(); window.scrollTo(0, 0); },
+    'setup-hide': () => { S.settings.setup = { ...S.settings.setup, hide: true }; persist(); render(); },
     openact: () => openAct(D.id),
     loadact: async () => {
       const e = S.log.find((x) => String(x.id) === D.id);
@@ -654,8 +706,10 @@ document.addEventListener('change', async (ev) => {
 });
 
 function exportData() {
+  S.settings.lastExport = Date.now();
+  persist();
   const copy = { ...S.settings, worker: { url: '', key: '' } };
-  const blob = new Blob([JSON.stringify({ v: 3, settings: copy, log: S.log, ov: S.ov, checkin: S.checkin, gym: S.gym, notes: S.notes, wellness: S.wellness, food: S.food, foods: S.foods, fav: S.fav, body: S.body }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ v: 3, settings: copy, log: S.log, ov: S.ov, checkin: S.checkin, gym: S.gym, notes: S.notes, wellness: S.wellness, food: S.food, foods: S.foods, fav: S.fav, body: S.body, water: S.water }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `marathon-sicherung-${iso(new Date())}.json`;
@@ -668,7 +722,7 @@ function importData(text) {
     if (!confirm(`Aktuelle Daten durch die Sicherung (${d.log.length} Einträge) ersetzen?`)) return;
     const w = S.settings.worker;
     S.settings = { ...DEFAULT_SETTINGS, ...d.settings, worker: w }; S.log = d.log; S.ov = d.ov || { skip: {}, extra: {} };
-    S.checkin = d.checkin || {}; S.gym = d.gym || []; S.notes = d.notes || []; S.wellness = d.wellness || {}; S.food = d.food || []; S.foods = d.foods || []; S.fav = d.fav || {}; S.body = d.body || [];
+    S.checkin = d.checkin || {}; S.gym = d.gym || []; S.notes = d.notes || []; S.wellness = d.wellness || {}; S.food = d.food || []; S.foods = d.foods || []; S.fav = d.fav || {}; S.body = d.body || []; S.water = d.water || {};
     persist(); refresh(); toast('Sicherung eingespielt');
   } catch { toast('Die Datei konnte nicht gelesen werden'); }
 }

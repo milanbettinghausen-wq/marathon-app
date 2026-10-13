@@ -61,7 +61,7 @@ function actKcal(e, p) {
 function dayTarget(d) {
   const p = S.settings.profile;
   if (!p || !p.kg) return null;
-  const base = p.tdeeBase || bmr(p) * 1.2;
+  const base = p.baseOverride || p.tdeeBase || bmr(p) * 1.2;
   const done = logsOn(d).reduce((a, e) => a + actKcal(e, p), 0);
   let planned = 0;
   if (d === iso(todayDate())) {
@@ -72,7 +72,7 @@ function dayTarget(d) {
   }
   const adj = p.goal === 'lose' ? 0.85 : p.goal === 'gain' ? 1.1 : 1;
   const k = Math.round((base + done + planned) * adj);
-  const prot = Math.round(1.8 * p.kg);
+  const prot = p.protOverride || Math.round(1.8 * p.kg);
   const fat = Math.round(Math.max((0.25 * k) / 9, 0.8 * p.kg));
   const carb = Math.max(0, Math.round((k - prot * 4 - fat * 9) / 4));
   return { k, p: prot, f: fat, c: carb, base: Math.round(base * adj), act: Math.round(done), planned: Math.round(planned) };
@@ -113,6 +113,20 @@ function recentFoods(n = 8) {
   return out;
 }
 
+function waterGoal(d) {
+  const p = S.settings.profile;
+  const mins = logsOn(d).reduce((a, e) => a + e.min, 0);
+  return Math.round((p && p.kg ? p.kg * 33 : 2500) + (mins / 60) * 500);
+}
+function waterCard(d) {
+  const ml = S.water[d] || 0, goal = waterGoal(d);
+  const glasses = Math.round(goal / 250);
+  const n = Math.round(ml / 250);
+  return `<div class="card"><div class="meal-h"><div><b>Wasser</b><small>${(ml / 1000).toFixed(2).replace('.', ',')} von ${(goal / 1000).toFixed(1).replace('.', ',')} Liter</small></div>
+    <div class="mh-b"><button class="chip" data-act="f-water" data-n="-250">−</button><button class="chip on" data-act="f-water" data-n="250">+ 250 ml</button></div></div>
+    <div class="glasses">${[...Array(Math.max(glasses, n))].map((_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div></div>`;
+}
+
 function macroBar(label, v, t, color) {
   const pct = t ? clamp(v / t, 0, 1) * 100 : 0;
   return `<div class="mac"><div class="mac-h"><span>${label}</span><b>${Math.round(v)}${t ? ` / ${t}` : ''} g</b></div><div class="mac-b"><i style="width:${pct}%;background:${color}"></i></div></div>`;
@@ -127,7 +141,9 @@ function viewFood() {
   const meals = MEALS.map((m) => {
     const list = ents.filter((e) => e.meal === m);
     const mk = list.reduce((a, e) => a + e.k, 0);
-    return `<div class="card meal"><div class="meal-h"><div><b>${m}</b><small>${Math.round(mk)} kcal</small></div><button class="chip" data-act="f-add" data-meal="${m}">+ Hinzufügen</button></div>
+    const prev = iso(addDays(dd, -1));
+    const canCopy = !list.length && S.food.some((e) => e.date === prev && e.meal === m);
+    return `<div class="card meal"><div class="meal-h"><div><b>${m}</b><small>${Math.round(mk)} kcal</small></div><div class="mh-b">${canCopy ? `<button class="chip" data-act="f-copymeal" data-meal="${m}" title="Wie gestern">↺ Wie gestern</button>` : ''}<button class="chip" data-act="f-add" data-meal="${m}">+ Hinzufügen</button></div></div>
       ${list.map((e) => `<button class="ent" data-act="f-edit" data-id="${e.id}"><span>${esc(e.name)}<small>${e.g ? `${r1(e.g)} g` : 'Schnell eingetragen'}</small></span><b>${Math.round(e.k)}</b></button>`).join('') || '<p class="muted" style="margin:6px 0 0">Noch nichts.</p>'}</div>`;
   }).join('');
   const rec = recentFoods();
@@ -150,6 +166,7 @@ function viewFood() {
   ${rec.length ? `<p class="eyebrow sp">Schnell wieder hinzufügen</p><div class="filters">${rec.map((r) => `<button class="chip" data-act="f-quick" data-ref="${r.f.id}" data-g="${r.g}">${esc(r.f.name)} · ${r1(r.g)} g</button>`).join('')}</div>` : ''}
   ${sg.length ? `<div class="card"><h2>Was passt jetzt?</h2><p class="muted" style="margin-top:-4px">Passend zu deiner Tageszeit und dem, was dir heute noch fehlt.</p>${sg.map((o) => suggRow(o, defaultMeal())).join('')}</div>` : ''}
   ${meals}
+  ${waterCard(d, tg)}
   <div class="card"><details><summary>Nährwerte im Detail</summary>
     ${row('Zucker', tot.s, 50, 'g', false)}${row('Gesättigte Fette', tot.sf, satLimit, 'g', false)}${row('Ballaststoffe', tot.fi, 30, 'g', true)}${row('Salz', tot.sa, 6, 'g', false)}
     <p class="muted">Richtwerte: höchstens 50 g Zucker, 10 % der Energie als gesättigtes Fett, 6 g Salz, mindestens 30 g Ballaststoffe. Vitamine und Mineralstoffe zeige ich nicht, dazu sind die Daten nicht verlässlich genug.</p></details></div>
@@ -496,6 +513,10 @@ function openProfile() {
     <label>Geschlecht<select name="sex"><option value="m"${p.sex === 'm' ? ' selected' : ''}>männlich</option><option value="f"${p.sex === 'f' ? ' selected' : ''}>weiblich</option></select></label></div>
     <label>Ziel<select name="goal"><option value="hold"${p.goal === 'hold' ? ' selected' : ''}>Gewicht halten</option><option value="lose"${p.goal === 'lose' ? ' selected' : ''}>Abnehmen (15 % weniger)</option><option value="gain"${p.goal === 'gain' ? ' selected' : ''}>Aufbauen (10 % mehr)</option></select></label>
     ${obs ? `<label class="check-l"><input type="checkbox" name="useobs"${p.tdeeBase ? ' checked' : ''}> Meinen gemessenen Verbrauch (${obs} kcal) als Basis nehmen</label>` : ''}
+    <details><summary>Eigene Zielwerte (optional)</summary>
+      <div class="grid2"><label>Grundbedarf kcal ohne Training<input name="base" type="number" value="${p.baseOverride || ''}" placeholder="automatisch"></label>
+      <label>Eiweiß g pro Tag<input name="prot" type="number" value="${p.protOverride || ''}" placeholder="automatisch"></label></div>
+      <p class="muted">Leer lassen, dann rechne ich selbst. Dein Training kommt immer obendrauf.</p></details>
     <p class="muted">Das Budget besteht aus Grundumsatz mal 1,2 (Alltag) plus deinem Training. Das sind Schätzwerte, kein Ersatz für Ernährungsberatung.</p>
     <button class="btn full">Speichern</button></form>`);
 }
@@ -532,7 +553,12 @@ function foodHandlers(D) {
       if (f) openAmount(f, e);
       else openSheet(e.name, `<p class="muted">${Math.round(e.k)} kcal · ${r1(e.p)} g Eiweiß · ${r1(e.c)} g Kohlenhydrate · ${r1(e.f)} g Fett</p><div class="row"><button class="ghost danger" data-act="f-del" data-id="${e.id}">Löschen</button><button class="ghost" data-act="close">Schließen</button></div>`);
     },
-    'f-del': () => { S.food = S.food.filter((x) => String(x.id) !== D.id); persist(); closeSheet(); render(); toast('Gelöscht'); },
+    'f-del': () => {
+      const old = S.food.find((x) => String(x.id) === D.id);
+      S.food = S.food.filter((x) => String(x.id) !== D.id);
+      persist(); closeSheet(); render();
+      toast('Gelöscht', 'Rückgängig', () => { if (old) { S.food.push(old); persist(); render(); } });
+    },
     'f-online': () => onlineSearch(D.q),
     'f-quickcal': openQuick,
     'f-custom': () => openCustom(),
@@ -546,6 +572,16 @@ function foodHandlers(D) {
     },
     'f-ingdel': () => { fui.recipe.items.splice(+D.i, 1); openRecipe(); },
     'f-profile': openProfile,
+    'f-copymeal': () => {
+      const prev = iso(addDays(parseISO(fui.date), -1));
+      const src = S.food.filter((e) => e.date === prev && e.meal === D.meal);
+      src.forEach((e) => S.food.push({ ...e, id: uid(), date: fui.date }));
+      persist(); render(); toast(`${src.length} Einträge von gestern übernommen`);
+    },
+    'f-water': () => {
+      S.water[fui.date] = Math.max(0, (S.water[fui.date] || 0) + (+D.n));
+      persist(); render();
+    },
     'f-cat': () => openBrowse(D.c),
     'f-more': () => { fbrowse.shown += 40; renderBrowse(); },
     'f-sugg': () => {
@@ -563,7 +599,11 @@ function el_toggleFav(id) {
 
 document.addEventListener('input', (ev) => {
   if (ev.target.id === 'fbq') { fbrowse.q = ev.target.value; fbrowse.shown = 40; renderBrowse(); return; }
-  if (ev.target.id === 'fq') fillResults(ev.target.value);
+  if (ev.target.id === 'fq') {
+    clearTimeout(fui.deb);
+    const v = ev.target.value;
+    fui.deb = setTimeout(() => fillResults(v), 120);
+  }
   if (ev.target.id === 'fg') updatePreview();
 });
 
@@ -616,6 +656,8 @@ document.addEventListener('submit', (ev) => {
     openAmount(food);
   } else if (kind === 'f-profile') {
     const p = { kg: +fd.kg, cm: +fd.cm, age: +fd.age, sex: fd.sex, goal: fd.goal };
+    if (+fd.base > 0) p.baseOverride = +fd.base;
+    if (+fd.prot > 0) p.protOverride = +fd.prot;
     const obs = observedTdee();
     if (fd.useobs && obs) p.tdeeBase = obs;
     S.settings.profile = p;
