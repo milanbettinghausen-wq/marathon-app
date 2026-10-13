@@ -26,3 +26,9 @@
 .scanbar p { margin: 0; color: var(--muted); text-align: center; font-size: .9rem; }
 .exgroups { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
 .exlist { max-height: 46vh; overflow: auto; }
+
+.catgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 8px; }
+.catb { background: var(--s2); border: 1px solid var(--line); color: var(--text); border-radius: 14px; padding: 12px 10px; text-align: left; font-weight: 600; font-size: .88rem; display: flex; flex-direction: column; gap: 2px; }
+.catb span { font-size: 1.3rem; } .catb small { color: var(--muted); font-weight: 500; }
+.fr.sg b { background: var(--ball); color: #2a0c04; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+.src { font-size: .72rem; margin: 6px 4px 0; }

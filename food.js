@@ -4,7 +4,35 @@ const NUTS = ['k', 'p', 'c', 'f', 's', 'sf', 'fi', 'sa'];
 const fui = { date: iso(todayDate()), meal: 'Frühstück', cur: null, recipe: null, mode: 'log', reader: null, stream: null };
 
 const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
-const allFoods = () => [...S.foods, ...FOODS];
+// Grosse Datenbank (Supermarkt-Produkte und Gerichte), wird erst bei Bedarf geladen
+let EXT = [];
+let EXT_CATS = [];
+let dbState = 'idle';
+let dbPromise = null;
+const hash = (str) => { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+function ensureDB() {
+  if (dbState === 'ready') return Promise.resolve(true);
+  if (dbPromise) return dbPromise;
+  dbState = 'loading';
+  dbPromise = (async () => {
+    try {
+      const r = await fetch('foods-db.json');
+      const d = await r.json();
+      EXT_CATS = d.cats;
+      EXT = d.rows.map((x) => ({
+        id: x[10] ? 'o' + x[10] : 'u' + hash(x[0]), name: x[0], brand: x[1], k: x[2], p: x[3], c: x[4], f: x[5], s: x[6], sf: x[7], fi: x[8], sa: x[9],
+        code: x[10], cat: d.cats[x[11]], src: 'db2',
+        portions: (x[12] || '').split(';').filter(Boolean).map((q) => { const [n, g] = q.split('='); return { n, g: +g }; }),
+        nn: norm(x[0] + ' ' + x[1]),
+      }));
+      dbState = 'ready';
+      return true;
+    } catch { dbState = 'error'; dbPromise = null; return false; }
+  })();
+  return dbPromise;
+}
+const allFoods = () => [...S.foods, ...FOODS, ...EXT];
+const nnOf = (f) => f.nn || (f.nn = norm(f.name + ' ' + (f.brand || '')));
 const foodById = (id) => allFoods().find((f) => f.id === id);
 function defaultMeal() { const h = new Date().getHours(); return h < 10 ? 'Frühstück' : h < 15 ? 'Mittag' : h < 21 ? 'Abend' : 'Snacks'; }
 const round1 = (x) => Math.round(x * 10) / 10;
@@ -103,6 +131,7 @@ function viewFood() {
       ${list.map((e) => `<button class="ent" data-act="f-edit" data-id="${e.id}"><span>${esc(e.name)}<small>${e.g ? `${r1(e.g)} g` : 'Schnell eingetragen'}</small></span><b>${Math.round(e.k)}</b></button>`).join('') || '<p class="muted" style="margin:6px 0 0">Noch nichts.</p>'}</div>`;
   }).join('');
   const rec = recentFoods();
+  const sg = d === T ? suggestions(defaultMeal(), 3) : [];
   const sparkSer = weightTrend().slice(-10);
   const lastW = sparkSer[sparkSer.length - 1];
   const obs = observedTdee();
@@ -119,6 +148,7 @@ function viewFood() {
   ${tg ? `<p class="muted tgline">Ziel ${tg.k} kcal = Grundumsatz plus Alltag ${tg.base}${tg.act ? `, Training ${tg.act}` : ''}${tg.planned ? `, geplantes Training ${tg.planned}` : ''}. Gegessen ${Math.round(tot.k)}.</p>` : ''}
   <div class="row wrap faddrow"><button class="btn" data-act="f-add" data-meal="${defaultMeal()}">+ Essen hinzufügen</button><button class="ghost" data-act="f-scan" data-meal="${defaultMeal()}">📷 Scannen</button></div>
   ${rec.length ? `<p class="eyebrow sp">Schnell wieder hinzufügen</p><div class="filters">${rec.map((r) => `<button class="chip" data-act="f-quick" data-ref="${r.f.id}" data-g="${r.g}">${esc(r.f.name)} · ${r1(r.g)} g</button>`).join('')}</div>` : ''}
+  ${sg.length ? `<div class="card"><h2>Was passt jetzt?</h2><p class="muted" style="margin-top:-4px">Passend zu deiner Tageszeit und dem, was dir heute noch fehlt.</p>${sg.map((o) => suggRow(o, defaultMeal())).join('')}</div>` : ''}
   ${meals}
   <div class="card"><details><summary>Nährwerte im Detail</summary>
     ${row('Zucker', tot.s, 50, 'g', false)}${row('Gesättigte Fette', tot.sf, satLimit, 'g', false)}${row('Ballaststoffe', tot.fi, 30, 'g', true)}${row('Salz', tot.sa, 6, 'g', false)}
@@ -127,7 +157,8 @@ function viewFood() {
     ${lastW ? `<div class="wline"><b>${r1(lastW.trend)} kg</b><small>Trend · zuletzt ${r1(lastW.kg)} kg am ${fmtShort(parseISO(lastW.date))}</small>${spark(sparkSer.map((s) => s.trend), 'var(--ball)')}</div>` : '<p class="muted">Trag dein Gewicht ein, am besten morgens. Ich glätte Schwankungen zu einem Trend.</p>'}
     <form data-form="f-weight" class="coachform"><input name="kg" type="number" step="0.1" min="30" max="250" placeholder="kg" inputmode="decimal"><button class="btn sm">Eintragen</button></form>
     ${obs ? `<p class="muted">Aus deinem Essen und Gewichtsverlauf der letzten Wochen ergibt sich ein Verbrauch von etwa <b>${obs} kcal</b> pro Tag (ohne Training zusätzlich gerechnet ist das dein tatsächlicher Durchschnitt).</p>` : '<p class="muted">Nach etwa zwei Wochen mit Essen und Gewicht kann ich deinen echten Verbrauch ausrechnen.</p>'}
-    <button class="link" data-act="f-profile">Angaben und Ziel ändern</button></div>`;
+    <button class="link" data-act="f-profile">Angaben und Ziel ändern</button></div>
+  <p class="muted src">Daten: Open Food Facts (ODbL), USDA FoodData Central. Nährwerte sind Richtwerte und können abweichen. Prüf Produkte gegen die Packung.</p>`;
 }
 
 // ---------- Hinzufuegen ----------
@@ -141,9 +172,129 @@ function openAddSheet(meal) {
   fillResults('');
 }
 
-function foodRow(f, extra = '') {
-  const sub = [f.brand, f.k != null ? `${Math.round(f.k)} kcal / 100 g` : ''].filter(Boolean).join(' · ');
-  return `<button class="fr" data-act="f-pick" data-id="${esc(f.id)}"><span>${esc(f.name)}<small>${esc(sub)}</small></span>${S.fav[f.id] ? '<i>★</i>' : ''}${extra}</button>`;
+function foodRow(f) {
+  const sub = [f.brand, f.cat && f.src !== 'db2' ? '' : '', f.k != null ? `${Math.round(f.k)} kcal / 100 g` : ''].filter(Boolean).join(' · ');
+  return `<button class="fr" data-act="f-pick" data-id="${esc(f.id)}"><span>${esc(f.name)}<small>${esc(sub)}</small></span>${S.fav[f.id] ? '<i>★</i>' : ''}</button>`;
+}
+
+const MEAL_CATS = {
+  'Frühstück': ['Frühstück & Müsli', 'Milchprodukte & Käse', 'Obst', 'Brot & Backwaren', 'Eier'],
+  Mittag: ['Gerichte', 'Suppen & Eintöpfe', 'Fleisch & Wurst', 'Fisch & Meeresfrüchte', 'Nudeln, Reis & Getreide', 'Gemüse & Salate', 'Eier', 'Hülsenfrüchte & Nüsse'],
+  Abend: ['Gerichte', 'Suppen & Eintöpfe', 'Fleisch & Wurst', 'Fisch & Meeresfrüchte', 'Nudeln, Reis & Getreide', 'Gemüse & Salate', 'Eier', 'Hülsenfrüchte & Nüsse'],
+  Snacks: ['Obst', 'Milchprodukte & Käse', 'Hülsenfrüchte & Nüsse', 'Snacks & Chips', 'Süßes & Desserts', 'Brot & Backwaren'],
+};
+
+// Vorschlaege: passen zu dem, was heute noch fehlt (Kalorien, Eiweiss), zur Tageszeit und zu deinen Favoriten
+const RE_BREAKFAST = /haferflocken|müsli|cornflakes|toast|brötchen|joghurt|skyr|quark|^ei\b|banane|apfel|milch|honig|marmelade|nutella|haferbrei|pfannkuchen|rührei|knäcke|vollkornbrot|frischkäse|beeren|orange|kiwi|obst/i;
+const RE_MAIN = /reis|nudeln|kartoffel|hähnchen|pute|rind|schwein|lachs|thunfisch|garnelen|linsen|kichererbsen|bohnen|tofu|brokkoli|spinat|suppe|eintopf|pizza|burger|döner|wrap|lasagne|chili|gulasch|schnitzel|salat|curry|pfanne|bolognese|quinoa|couscous|bulgur|zucchini|champignons|paprika|rührei|bratkartoffeln|spaghetti|fisch|gemüse/i;
+const RE_SNACK = /apfel|banane|birne|trauben|nüsse|mandeln|walnüsse|erdnüsse|cashew|riegel|joghurt|skyr|quark|schokolade|chips|kekse|gummi|reiswaffel|hummus|datteln|kiwi|erdbeeren|blaubeeren|mango|ananas|orange|hüttenkäse|ei\b/i;
+const RE_NOSUGG = /honig|marmelade|zucker|öl|olivenöl|rapsöl|butter|mayonnaise|ketchup|saft|cola|bier|wein|energy|kaffee|sirup|dressing|soße|pulver|gewürz/i;
+const RE_EXOTIC = /puerto|mexikanisch|hawai|indisch|korean|japan|thai|chinesisch|asiatisch|kreolisch|dominikan|syrisch|äthiop|peruan|kubanisch|jamaika|kaki|fufu|innereien|kutteln|schweineohren|ochsen|opossum|waschbär|eichhörnchen|biber|\bbär\b|murmeltier|gürteltier|karibu|elch|schildkröte|frosch|taube|hirn|zunge|diät|fertiggericht|tiefgekühlt|aus der dose|\(|jerky|speck|schmalz/i;
+
+function mealFits(f, meal) {
+  const cats = new Set(MEAL_CATS[meal] || MEAL_CATS.Mittag);
+  if (f.src === 'custom') return true;
+  if (f.src === 'db') {
+    const re = meal === 'Frühstück' ? RE_BREAKFAST : meal === 'Snacks' ? RE_SNACK : RE_MAIN;
+    return re.test(f.name);
+  }
+  if (f.src === 'db2') {
+    if (!f.id.startsWith('u')) return false;
+    if (f.name.length > 42 || RE_EXOTIC.test(f.name)) return false;
+    return !!f.cat && cats.has(f.cat);
+  }
+  return false;
+}
+
+function suggestions(meal, n = 6) {
+  const d = fui.date;
+  const ents = dayEntries(d), tot = sumNut(ents), tg = dayTarget(d);
+  const left = tg ? Math.max(0, tg.k - tot.k) : 1200;
+  const need = tg ? { p: Math.max(0, tg.p - tot.p), c: Math.max(0, tg.c - tot.c), f: Math.max(0, tg.f - tot.f) } : { p: 30, c: 80, f: 25 };
+  const base = { 'Frühstück': 450, Mittag: 650, Abend: 600, Snacks: 200 }[meal] || 450;
+  const targetK = clamp(Math.min(base, left * 0.6), 120, 800);
+  const nv = [need.p * 4, need.c * 4, need.f * 9];
+  const nn = Math.hypot(...nv) || 1;
+  const eaten = new Set(ents.map((e) => e.ref));
+  const recent = new Set(recentFoods(30).map((r) => r.f.id));
+  const day = parseISO(d).getDate();
+  const out = [];
+  allFoods().forEach((f) => {
+    if (!(S.fav[f.id] || mealFits(f, meal))) return;
+    if (RE_NOSUGG.test(f.name) && !S.fav[f.id]) return;
+    if (f.k < 25 || f.k > 700) return;
+    const per = f.k / 100;
+    const por = (f.portions || []).filter((p) => p.g >= 25 && p.g <= 600);
+    let g;
+    if (por.length) g = por[0].g;
+    else g = per > 3.5 ? 30 : (meal === 'Snacks' ? 100 : 150);
+    if (por.length > 1) {
+      const best = por.reduce((a, p) => (Math.abs(p.g * per - targetK) < Math.abs(a.g * per - targetK) ? p : a));
+      g = best.g;
+    }
+    // Menge auf das Ziel ausrichten, aber in sinnvollen Grenzen
+    const scaled = clamp(targetK / per, g * 0.6, g * 1.8);
+    g = Math.round(scaled / 5) * 5;
+    const k = g * per;
+    if (k > targetK * 1.6 || k < targetK * 0.35) return;
+    const v = [f.p * g / 100 * 4, f.c * g / 100 * 4, f.f * g / 100 * 9];
+    const cos = (v[0] * nv[0] + v[1] * nv[1] + v[2] * nv[2]) / ((Math.hypot(...v) || 1) * nn);
+    let score = cos * 1.2 - Math.abs(k - targetK) / targetK;
+    if (f.src === 'db' || f.src === 'custom') score += 0.4;
+    if (S.fav[f.id]) score += 0.4;
+    if (recent.has(f.id)) score += 0.15;
+    if (eaten.has(f.id)) score -= 1.5;
+    score += ((hash(f.id + day).charCodeAt(0) % 10) / 10) * 0.2;
+    out.push({ f, g, k, score });
+  });
+  out.sort((a, b) => b.score - a.score);
+  const picked = [], seen = new Set();
+  for (const o of out) {
+    const key = norm(o.f.name).split(/[ ,]/)[0];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picked.push(o);
+    if (picked.length >= n) break;
+  }
+  return picked;
+}
+function suggRow(o, meal) {
+  const pr = Math.round(o.f.p * o.g / 100);
+  return `<button class="fr sg" data-act="f-sugg" data-ref="${esc(o.f.id)}" data-g="${o.g}" data-meal="${meal}"><span>${esc(o.f.name)}<small>${o.g} g · ${Math.round(o.k)} kcal · ${pr} g Eiweiß</small></span><b>+</b></button>`;
+}
+
+function catCounts() {
+  const c = {};
+  allFoods().forEach((f) => { if (f.cat) c[f.cat] = (c[f.cat] || 0) + 1; });
+  return c;
+}
+const CAT_ORDER = ['Gerichte', 'Suppen & Eintöpfe', 'Fertiggerichte', 'Fleisch & Wurst', 'Fisch & Meeresfrüchte', 'Eier', 'Milchprodukte & Käse', 'Obst', 'Gemüse & Salate', 'Hülsenfrüchte & Nüsse',
+  'Brot & Backwaren', 'Nudeln, Reis & Getreide', 'Frühstück & Müsli', 'Süßes & Desserts', 'Snacks & Chips', 'Getränke', 'Soßen, Dips & Öle', 'Sonstiges'];
+const CAT_ICON = { Gerichte: '🍝', 'Suppen & Eintöpfe': '🍲', Fertiggerichte: '🍱', 'Fleisch & Wurst': '🥩', 'Fisch & Meeresfrüchte': '🐟', Eier: '🥚', 'Milchprodukte & Käse': '🧀',
+  Obst: '🍎', 'Gemüse & Salate': '🥗', 'Hülsenfrüchte & Nüsse': '🥜', 'Brot & Backwaren': '🍞', 'Nudeln, Reis & Getreide': '🍚', 'Frühstück & Müsli': '🥣', 'Süßes & Desserts': '🍫',
+  'Snacks & Chips': '🍿', Getränke: '🥤', 'Soßen, Dips & Öle': '🫒', Sonstiges: '🛒' };
+// kuratierte Eintraege tragen die alten Kategorienamen, auf die neuen abbilden
+const OLD_CAT = { 'Brot, Getreide, Beilagen': 'Nudeln, Reis & Getreide', 'Milch, Eier, Käse': 'Milchprodukte & Käse', 'Fleisch, Fisch, vegetarisch': 'Fleisch & Wurst', Gemüse: 'Gemüse & Salate', Obst: 'Obst',
+  'Nüsse, Öl, Süßes, Snacks': 'Süßes & Desserts', Getränke: 'Getränke', 'Gerichte (typische Portionen)': 'Gerichte' };
+FOODS.forEach((f) => { f.cat = OLD_CAT[f.cat] || f.cat; });
+
+const fbrowse = { cat: null, q: '', shown: 40 };
+
+function openBrowse(cat) {
+  fbrowse.cat = cat; fbrowse.q = ''; fbrowse.shown = 40;
+  openSheet(`${CAT_ICON[cat] || ''} ${cat}`, `<input id="fbq" class="fsearch" placeholder="In dieser Kategorie suchen …" autocomplete="off">
+    <div id="fbres" class="fres"></div><button class="link" data-act="f-add" data-meal="${fui.meal}">‹ Zurück zur Suche</button>`);
+  renderBrowse();
+}
+function renderBrowse() {
+  const box = $('#fbres');
+  if (!box) return;
+  const toks = norm(fbrowse.q).split(/\s+/).filter(Boolean);
+  let list = allFoods().filter((f) => f.cat === fbrowse.cat && (!toks.length || toks.every((t) => nnOf(f).includes(t))));
+  list.sort((a, b) => ((a.src === 'db2') - (b.src === 'db2')) || 0);
+  const total = list.length;
+  list = list.slice(0, fbrowse.shown);
+  box.innerHTML = `<p class="muted">${total} Einträge</p>${list.map((f) => foodRow(f)).join('')}${total > fbrowse.shown ? '<button class="addrow" data-act="f-more">Mehr anzeigen</button>' : ''}`;
 }
 
 function fillResults(q) {
@@ -152,16 +303,24 @@ function fillResults(q) {
   const n = norm(q.trim());
   if (!n) {
     const favs = allFoods().filter((f) => S.fav[f.id]);
-    const rec = recentFoods(10).map((r) => r.f);
-    box.innerHTML = `${favs.length ? `<p class="eyebrow sp">Favoriten</p>${favs.map((f) => foodRow(f)).join('')}` : ''}
-      ${rec.length ? `<p class="eyebrow sp">Zuletzt gegessen</p>${rec.map((f) => foodRow(f)).join('')}` : '<p class="muted sp">Tippe oben einen Namen ein oder scanne ein Produkt.</p>'}`;
+    const rec = recentFoods(8).map((r) => r.f);
+    const sg = suggestions(fui.meal, 5);
+    const counts = catCounts();
+    box.innerHTML = `${sg.length ? `<p class="eyebrow sp">Vorschläge für dich</p>${sg.map((o) => suggRow(o, fui.meal)).join('')}` : ''}
+      <p class="eyebrow sp">Durchstöbern</p>
+      <div class="catgrid">${CAT_ORDER.filter((c) => counts[c] || dbState !== 'ready').map((c) => `<button class="catb" data-act="f-cat" data-c="${esc(c)}"><span>${CAT_ICON[c] || '🍽'}</span>${esc(c)}${counts[c] ? `<small>${counts[c]}</small>` : ''}</button>`).join('')}</div>
+      ${dbState !== 'ready' ? '<p class="muted sp">Die große Datenbank mit Supermarkt-Produkten wird geladen …</p>' : ''}
+      ${favs.length ? `<p class="eyebrow sp">Favoriten</p>${favs.slice(0, 20).map((f) => foodRow(f)).join('')}` : ''}
+      ${rec.length ? `<p class="eyebrow sp">Zuletzt gegessen</p>${rec.map((f) => foodRow(f)).join('')}` : ''}`;
+    if (dbState === 'idle') ensureDB().then(() => { const el = $('#fq'); if (el && !el.value.trim()) fillResults(''); });
     return;
   }
+  if (dbState === 'idle') ensureDB().then(() => { const el = $('#fq'); if (el && el.value.trim()) fillResults(el.value); });
   const toks = n.split(/\s+/);
-  const hits = allFoods().filter((f) => { const nm = norm(f.name + ' ' + (f.brand || '')); return toks.every((t) => nm.includes(t)); })
-    .sort((a, b) => (norm(a.name).startsWith(toks[0]) ? 0 : 1) - (norm(b.name).startsWith(toks[0]) ? 0 : 1) || a.name.length - b.name.length).slice(0, 30);
-  box.innerHTML = `${hits.map((f) => foodRow(f)).join('') || '<p class="muted sp">Nichts in deiner Liste gefunden.</p>'}
-    ${wcfg() ? `<button class="addrow" data-act="f-online" data-q="${esc(q)}">🌐 Auch in Open Food Facts suchen</button>` : '<p class="muted sp">Für die Online-Suche muss die Server-Verbindung eingerichtet sein (Einstellungen).</p>'}
+  const hits = allFoods().filter((f) => { const nm = nnOf(f); return toks.every((t) => nm.includes(t)); })
+    .sort((a, b) => ((a.src === 'db2') - (b.src === 'db2')) || ((norm(a.name).startsWith(toks[0]) ? 0 : 1) - (norm(b.name).startsWith(toks[0]) ? 0 : 1)) || a.name.length - b.name.length).slice(0, 40);
+  box.innerHTML = `${dbState === 'loading' ? '<p class="muted sp">Lade die große Datenbank …</p>' : ''}${hits.map((f) => foodRow(f)).join('') || '<p class="muted sp">Nichts gefunden.</p>'}
+    ${wcfg() ? `<button class="addrow" data-act="f-online" data-q="${esc(q)}">🌐 Auch live in Open Food Facts suchen</button>` : ''}
     <div id="fonline"></div>`;
 }
 
@@ -281,6 +440,9 @@ async function lookupCode(code) {
   if (!code) return;
   const known = S.foods.find((f) => f.code === code);
   if (known) { openAmount(known); return; }
+  await ensureDB();
+  const inDb = EXT.find((f) => f.code === code);
+  if (inDb) { openAmount(inDb); return; }
   toast('Suche Produkt …');
   try {
     const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,nutriments,serving_quantity,quantity`);
@@ -384,6 +546,14 @@ function foodHandlers(D) {
     },
     'f-ingdel': () => { fui.recipe.items.splice(+D.i, 1); openRecipe(); },
     'f-profile': openProfile,
+    'f-cat': () => openBrowse(D.c),
+    'f-more': () => { fbrowse.shown += 40; renderBrowse(); },
+    'f-sugg': () => {
+      const f = foodById(D.ref);
+      if (!f) return;
+      saveEntry(f, +D.g, D.meal || defaultMeal(), fui.date);
+      closeSheet(); render(); toast(`${f.name} hinzugefügt`);
+    },
   };
 }
 function el_toggleFav(id) {
@@ -392,6 +562,7 @@ function el_toggleFav(id) {
 }
 
 document.addEventListener('input', (ev) => {
+  if (ev.target.id === 'fbq') { fbrowse.q = ev.target.value; fbrowse.shown = 40; renderBrowse(); return; }
   if (ev.target.id === 'fq') fillResults(ev.target.value);
   if (ev.target.id === 'fg') updatePreview();
 });
