@@ -101,7 +101,7 @@ function actRow(e) {
 }
 
 function sessionCard(s) {
-  const sp = SPORTS[s.t];
+  const sp = metaOf(s);
   if (s.t === 'gym' && !s.done && !s.restDay) {
     const sps = S.settings.gymSplits[s.split] || { ex: [] };
     const last = lastGym(s.split);
@@ -151,7 +151,7 @@ function viewToday() {
   const strip = [...Array(7)].map((_, i) => {
     const d = addDays(mon, i), di = iso(d);
     const list = (wp.days[di] || []).filter((s) => !s.hidden);
-    const dots = list.map((s) => `<i style="background:${SPORTS[s.t].color};opacity:${s.done ? 1 : .4}"></i>`).join('');
+    const dots = list.map((s) => `<i style="background:${metaOf(s).color};opacity:${s.done ? 1 : .4}"></i>`).join('');
     const allDone = list.length && list.every((s) => s.done);
     return `<button class="dpill${di === ui.sel ? ' sel' : ''}${di === T ? ' tod' : ''}${allDone ? ' ok' : ''}" data-act="sel" data-d="${di}">
       <small>${WD[i]}</small><strong>${d.getDate()}</strong><span class="dots">${dots || '<i class="none"></i>'}</span></button>`;
@@ -334,7 +334,7 @@ function viewPlan() {
       const wp = weekSessions(w.mon);
       detail = `<div class="wkdetail">${Object.entries(wp.days).map(([di, list]) => {
         const d = parseISO(di);
-        const items = list.filter((s) => !s.hidden).map((s) => `<span class="mini" style="--c:${SPORTS[s.t].color}">${SPORTS[s.t].icon} ${esc(s.title)}${s.t === 'run' && s.km ? ` · ${s.km} km` : ''}</span>`).join('') || '<span class="muted">frei</span>';
+        const items = list.filter((s) => !s.hidden).map((s) => `<span class="mini" style="--c:${metaOf(s).color}">${metaOf(s).icon} ${esc(s.title)}${s.t === 'run' && s.km ? ` · ${s.km} km` : ''}</span>`).join('') || '<span class="muted">frei</span>';
         return `<div class="wkday"><b>${WD[dayIdx(d)]} ${d.getDate()}.</b><div>${items}</div></div>`;
       }).join('')}</div>`;
     }
@@ -412,8 +412,8 @@ function recoveryCard() {
 
 // ---------- EINSTELLUNGEN ----------
 function chip(it, d, i) {
-  const sp = SPORTS[it.t];
-  const label = it.t === 'run' ? { easy: 'Lockerer Lauf', quality: 'Tempolauf', long: 'Langer Lauf' }[it.role] : it.t === 'gym' ? `Gym ${it.split}` : it.t === 'football' ? `${it.n} ${it.min}′` : sp.name;
+  const sp = metaOf(it);
+  const label = it.t === 'other' ? `${it.sport} ${it.min}′` : it.t === 'run' ? { easy: 'Lockerer Lauf', quality: 'Tempolauf', long: 'Langer Lauf' }[it.role] : it.t === 'gym' ? `Gym ${it.split}` : it.t === 'football' ? `${it.n} ${it.min}′` : sp.name;
   return `<button class="ec" style="--c:${sp.color}" data-act="edititem" data-d="${d}" data-i="${i}">${sp.icon} ${esc(label)}${it.fixed ? ' 🔒' : ''}</button>`;
 }
 
@@ -494,12 +494,19 @@ function openAct(id) {
     <div class="row wrap">${e.sid && wcfg() && !e.hasDetail ? `<button class="ghost" data-act="loadact" data-id="${e.id}">Mehr Details laden</button>` : ''}<button class="ghost" data-act="editlog" data-id="${e.id}">Bearbeiten</button><button class="ghost" data-act="close">Schließen</button></div>`);
 }
 
-const itemTypes = [['football', 'Fußball'], ['gym', 'Gym'], ['run', 'Lauf'], ['swim', 'Schwimmen'], ['bike', 'Radfahren']];
+const itemTypes = [['football', 'Fußball'], ['gym', 'Gym'], ['run', 'Lauf'], ['swim', 'Schwimmen'], ['bike', 'Radfahren'], ['other', 'Andere Sportart …']];
+
+function openOther(target, tpl) {
+  openSheet('Andere Sportart', `<form data-form="other" data-target="${target}" data-tpl="${tpl ? 1 : 0}">
+    <label>Sportart<select name="sport">${SPORT_LIST.filter((n) => !['Laufen', 'Fußball', 'Gym', 'Radfahren', 'Schwimmen'].includes(n)).map((n) => `<option>${n}</option>`).join('')}</select></label>
+    <div class="grid2"><label>Minuten<input name="min" type="number" value="45" min="5" max="600"></label><label>Anstrengung 1 bis 10<input name="rpe" type="number" value="5" min="1" max="10"></label></div>
+    <button class="btn full">Hinzufügen</button></form>`);
+}
 
 function itemForm(d, i) {
   const it = S.settings.week[d][i];
   let f = '';
-  if (it.t === 'football') f = `<label>Name<input name="n" value="${esc(it.n)}"></label><div class="grid2"><label>Minuten<input type="number" name="min" value="${it.min}"></label><label>Anstrengung 1 bis 10<input type="number" name="rpe" value="${it.rpe}" min="1" max="10"></label></div>`;
+  if (it.t === 'football' || it.t === 'other') f = `<label>Name<input name="n" value="${esc(it.n)}"></label><div class="grid2"><label>Minuten<input type="number" name="min" value="${it.min}"></label><label>Anstrengung 1 bis 10<input type="number" name="rpe" value="${it.rpe}" min="1" max="10"></label></div>`;
   if (it.t === 'gym') f = `<label>Split<select name="split">${['A', 'B'].map((k) => `<option value="${k}"${it.split === k ? ' selected' : ''}>${k}: ${esc(S.settings.gymSplits[k].name)}</option>`).join('')}</select></label>`;
   if (it.t === 'run') f = `<label>Art<select name="role">${[['easy', 'Lockerer Lauf'], ['quality', 'Tempolauf / Intervalle'], ['long', 'Langer Lauf']].map(([v, l]) => `<option value="${v}"${it.role === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
   return `<form data-form="item" data-d="${d}" data-i="${i}">${f}<label class="check-l"><input type="checkbox" name="fixed"${it.fixed ? ' checked' : ''}> Fest eingeplant (wird nie angepasst)</label>
@@ -534,7 +541,7 @@ document.addEventListener('click', (ev) => {
       const s = findSession(D.date, D.key);
       if (!s) return;
       const e = s.est || { min: 45, rpe: 5 };
-      openLog({ date: D.date, sport: sportOfType(s.t), min: e.min, km: s.t === 'run' || s.t === 'race' ? s.km || '' : '', rpe: e.rpe }, `${s.title} abhaken`);
+      openLog({ date: D.date, sport: sportOfType(s.t, s), min: e.min, km: s.t === 'run' || s.t === 'race' ? s.km || '' : '', rpe: e.rpe }, `${s.title} abhaken`);
     },
     more: () => {
       const s = findSession(D.date, D.key);
@@ -556,7 +563,7 @@ document.addEventListener('click', (ev) => {
     move: () => {
       const s = findSession(D.date, D.key);
       if (!s) return;
-      const item = { t: s.t, role: s.role, split: s.split, n: s.n, min: s.min, rpe: s.rpe, fixed: s.fixed, id: 'x' + uid() };
+      const item = { t: s.t, role: s.role, split: s.split, n: s.n, sport: s.sport, min: s.min, rpe: s.rpe, fixed: s.fixed, id: 'x' + uid() };
       removeSession(D.date, D.key);
       (S.ov.extra[D.to] = S.ov.extra[D.to] || []).push(item);
       persist(); closeSheet(); ui.sel = D.to; refresh();
@@ -576,6 +583,7 @@ document.addEventListener('click', (ev) => {
       openSheet('Einheit hinzufügen', `<div class="menu">${itemTypes.map(([t, n]) => `<button data-act="addto" data-d="${D.d}" data-t="${t}">${SPORTS[t].icon} ${n}</button>`).join('')}</div>`);
     },
     addto: () => {
+      if (D.t === 'other') { openOther(D.d, false); return; }
       const it = { t: D.t, id: 'x' + uid() };
       if (D.t === 'run') it.role = 'easy';
       if (D.t === 'gym') it.split = 'A';
@@ -614,6 +622,7 @@ document.addEventListener('click', (ev) => {
     },
     additem: () => openSheet(`${WDL[D.d]}: Einheit hinzufügen`, `<div class="menu">${itemTypes.map(([t, n]) => `<button data-act="tpladd" data-d="${D.d}" data-t="${t}">${SPORTS[t].icon} ${n}</button>`).join('')}</div>`),
     tpladd: () => {
+      if (D.t === 'other') { openOther(D.d, true); return; }
       const it = { t: D.t };
       if (D.t === 'run') it.role = 'easy';
       if (D.t === 'gym') it.split = 'A';
@@ -687,6 +696,11 @@ document.addEventListener('submit', (ev) => {
     if (fd.split) it.split = fd.split; if (fd.role) it.role = fd.role;
     it.fixed = fd.fixed ? 1 : 0; if (!it.fixed) delete it.fixed;
     persist(); closeSheet(); refresh();
+  } else if (kind === 'other') {
+    const item = { t: 'other', sport: fd.sport, n: fd.sport, min: Math.max(5, +fd.min || 45), rpe: clamp(+fd.rpe || 5, 1, 10) };
+    if (f.dataset.tpl === '1') S.settings.week[+f.dataset.target].push(item);
+    else (S.ov.extra[f.dataset.target] = S.ov.extra[f.dataset.target] || []).push({ ...item, id: 'x' + uid() });
+    persist(); closeSheet(); refresh(); toast(`${fd.sport} hinzugefügt`);
   } else if (kind === 'source') {
     S.settings.worker = { url: (fd.url || '').trim(), key: (fd.key || '').trim() };
     persist(); render(); toast('Gespeichert');

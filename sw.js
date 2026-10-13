@@ -1,4 +1,4 @@
-const CACHE = 'marathon-v6';
+const CACHE = 'marathon-v7';
 const FILES = ['./', 'index.html', 'style.css', 'style-v3.css', 'style-v4.css', 'util.js', 'state.js', 'engine.js', 'coach.js', 'importer.js', 'icu.js', 'ui.js', 'gym.js', 'food-data.js', 'food.js', 'app.js', 'manifest.json', 'icon-180.png'];
 
 self.addEventListener('install', (e) => {

@@ -1,12 +1,15 @@
 // Ernaehrung: Tagebuch, Suche, Barcode, eigene Lebensmittel und Gerichte, Kalorienbudget aus dem Training
 const MEALS = ['Frühstück', 'Mittag', 'Abend', 'Snacks'];
 const NUTS = ['k', 'p', 'c', 'f', 's', 'sf', 'fi', 'sa'];
+// weitere Naehrwerte, nur wo Daten vorhanden sind: einfach/mehrfach ungesaettigt, Cholesterin, Kalium, Calcium, Eisen, Magnesium, Vitamin C, Ballaststoffe loeslich/unloeslich
+const XNUTS = ['mo', 'po', 'ch', 'ka', 'ca', 'fe', 'mg', 'vc', 'fs', 'fu'];
 const fui = { date: iso(todayDate()), meal: 'Frühstück', cur: null, recipe: null, mode: 'log', reader: null, stream: null };
 
 const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
 // Grosse Datenbank (Supermarkt-Produkte und Gerichte), wird erst bei Bedarf geladen
 let EXT = [];
 let EXT_CATS = [];
+const xobj = (arr) => { const o = {}; if (arr) XNUTS.forEach((k, i) => { if (arr[i] != null) o[k] = arr[i]; }); return o; };
 let dbState = 'idle';
 let dbPromise = null;
 const hash = (str) => { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
@@ -21,7 +24,7 @@ function ensureDB() {
       EXT_CATS = d.cats;
       EXT = d.rows.map((x) => ({
         id: x[10] ? 'o' + x[10] : 'u' + hash(x[0]), name: x[0], brand: x[1], k: x[2], p: x[3], c: x[4], f: x[5], s: x[6], sf: x[7], fi: x[8], sa: x[9],
-        code: x[10], cat: d.cats[x[11]], src: 'db2',
+        code: x[10], cat: d.cats[x[11]], src: 'db2', ...xobj(x[13]),
         portions: (x[12] || '').split(';').filter(Boolean).map((q) => { const [n, g] = q.split('='); return { n, g: +g }; }),
         nn: norm(x[0] + ' ' + x[1]),
       }));
@@ -40,12 +43,28 @@ const round1 = (x) => Math.round(x * 10) / 10;
 function nutOf(food, g) {
   const f = g / 100, o = {};
   NUTS.forEach((k) => { o[k] = round1((food[k] || 0) * f); });
+  XNUTS.forEach((k) => { if (food[k] != null) o[k] = Math.round(food[k] * f * 100) / 100; });
   return o;
 }
 const dayEntries = (d) => S.food.filter((e) => e.date === d);
 function sumNut(list) {
   const o = {};
   NUTS.forEach((k) => { o[k] = list.reduce((a, e) => a + (e[k] || 0), 0); });
+  return o;
+}
+
+function xCoverage(list) {
+  const totalK = list.reduce((a, e) => a + (e.k || 0), 0);
+  const c = {};
+  XNUTS.forEach((k) => {
+    const have = list.filter((e) => e[k] != null);
+    c[k] = totalK ? have.reduce((a, e) => a + (e.k || 0), 0) / totalK : 0;
+  });
+  return c;
+}
+function xSum(list) {
+  const o = {};
+  XNUTS.forEach((k) => { o[k] = list.reduce((a, e) => a + (e[k] || 0), 0); });
   return o;
 }
 
@@ -67,7 +86,7 @@ function dayTarget(d) {
   if (d === iso(todayDate())) {
     const wp = weekSessions(iso(mondayOf(todayDate())));
     (wp.days[d] || []).filter((s) => !s.done && !s.hidden && !s.restDay && s.est).forEach((s) => {
-      planned += ((MET[SPORT_NAME[s.t]] || 5) - 1) * p.kg * (s.est.min / 60);
+      planned += ((MET[s.t === 'other' ? s.sport : SPORT_NAME[s.t]] || 5) - 1) * p.kg * (s.est.min / 60);
     });
   }
   const adj = p.goal === 'lose' ? 0.85 : p.goal === 'gain' ? 1.1 : 1;
@@ -116,20 +135,59 @@ function recentFoods(n = 8) {
 function waterGoal(d) {
   const p = S.settings.profile;
   const mins = logsOn(d).reduce((a, e) => a + e.min, 0);
-  return Math.round((p && p.kg ? p.kg * 33 : 2500) + (mins / 60) * 500);
+  const base = S.settings.waterGoal > 0 ? S.settings.waterGoal : (p && p.kg ? p.kg * 33 : 2500);
+  return Math.round(base + (mins / 60) * 500);
 }
 function waterCard(d) {
-  const ml = S.water[d] || 0, goal = waterGoal(d);
-  const glasses = Math.round(goal / 250);
-  const n = Math.round(ml / 250);
+  const ml = S.water[d] || 0, goal = waterGoal(d), glass = S.settings.glassMl || 250;
+  const n = Math.round(ml / glass), glasses = Math.max(Math.round(goal / glass), n);
   return `<div class="card"><div class="meal-h"><div><b>Wasser</b><small>${(ml / 1000).toFixed(2).replace('.', ',')} von ${(goal / 1000).toFixed(1).replace('.', ',')} Liter</small></div>
-    <div class="mh-b"><button class="chip" data-act="f-water" data-n="-250">−</button><button class="chip on" data-act="f-water" data-n="250">+ 250 ml</button></div></div>
-    <div class="glasses">${[...Array(Math.max(glasses, n))].map((_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div></div>`;
+    <div class="mh-b"><button class="chip" data-act="f-water" data-n="${-glass}">−</button><button class="chip on" data-act="f-water" data-n="${glass}">+ ${glass} ml</button><button class="chip" data-act="f-waterset" aria-label="Menge anpassen">⋯</button></div></div>
+    <div class="glasses">${[...Array(Math.min(glasses, 24))].map((_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div></div>`;
+}
+function openWaterSheet() {
+  const glass = S.settings.glassMl || 250;
+  openSheet('Wasser', `<p class="muted" style="margin-top:-6px">Heute: ${((S.water[fui.date] || 0) / 1000).toFixed(2).replace('.', ',')} Liter, Ziel ${(waterGoal(fui.date) / 1000).toFixed(1).replace('.', ',')} Liter.</p>
+    <div class="filters">${[150, 200, 330, 500, 750, 1000].map((v) => `<button class="chip" data-act="f-water" data-n="${v}">+ ${v} ml</button>`).join('')}</div>
+    <form data-form="f-water-set"><div class="grid2"><label>Eigene Menge hinzufügen (ml)<input name="add" type="number" min="0" placeholder="z. B. 400" inputmode="numeric"></label>
+      <label>Glasgröße (ml)<input name="glass" type="number" min="50" value="${glass}" inputmode="numeric"></label></div>
+      <label>Tagesziel in ml (leer = automatisch aus Gewicht und Training)<input name="goal" type="number" min="0" value="${S.settings.waterGoal || ''}" placeholder="automatisch" inputmode="numeric"></label>
+      <button class="btn full">Speichern</button></form>`);
 }
 
 function macroBar(label, v, t, color) {
   const pct = t ? clamp(v / t, 0, 1) * 100 : 0;
   return `<div class="mac"><div class="mac-h"><span>${label}</span><b>${Math.round(v)}${t ? ` / ${t}` : ''} g</b></div><div class="mac-b"><i style="width:${pct}%;background:${color}"></i></div></div>`;
+}
+
+function detailHTML(tot, ents, tg) {
+  const x = xSum(ents), cov = xCoverage(ents);
+  const bar = (v, lim, good) => `<div class="mac-b"><i style="width:${clamp(v / lim, 0, 1) * 100}%;background:${good ? (v >= lim ? 'var(--run)' : 'var(--bike)') : (v > lim ? 'var(--bad)' : 'var(--run)')}"></i></div>`;
+  const row = (label, v, unit, lim, good, k) => {
+    const part = k && cov[k] < 0.98;
+    return `<div class="drow"><span>${label}</span>${lim ? bar(v, lim, good) : '<span></span>'}<b>${r1(v)} ${unit}${part ? '*' : ''}</b></div>`;
+  };
+  const satLimit = tg ? Math.round((0.1 * tg.k) / 9) : 22;
+  const unsat = Math.max(0, tot.f - tot.sf);
+  const anyX = XNUTS.some((k) => cov[k] > 0);
+  const minCov = Math.round(Math.min(...['ka', 'ca', 'fe', 'mg', 'vc'].map((k) => cov[k])) * 100);
+  const sect = (t) => `<p class="eyebrow sp">${t}</p>`;
+  return `${sect('Fette')}
+    ${row('Fett gesamt', tot.f, 'g', 0)}
+    ${row('Gesättigt', tot.sf, 'g', satLimit, false)}
+    ${row('Ungesättigt gesamt', unsat, 'g', 0)}
+    ${cov.mo > 0 ? row('Einfach ungesättigt', x.mo, 'g', 0, false, 'mo') : ''}${cov.po > 0 ? row('Mehrfach ungesättigt', x.po, 'g', 0, false, 'po') : ''}
+    ${sect('Kohlenhydrate')}
+    ${row('Kohlenhydrate gesamt', tot.c, 'g', 0)}
+    ${row('davon Zucker', tot.s, 'g', 50, false)}
+    ${row('Ballaststoffe', tot.fi, 'g', 30, true)}
+    ${cov.fs > 0 ? row('davon löslich', x.fs, 'g', 0, true, 'fs') : ''}${cov.fu > 0 ? row('davon unlöslich', x.fu, 'g', 0, true, 'fu') : ''}
+    ${sect('Salz, Mineralstoffe, Vitamine')}
+    ${row('Salz', tot.sa, 'g', 6, false)}
+    ${cov.ka > 0 ? row('Kalium', x.ka, 'mg', 4000, true, 'ka') : ''}${cov.ca > 0 ? row('Calcium', x.ca, 'mg', 1000, true, 'ca') : ''}${cov.fe > 0 ? row('Eisen', x.fe, 'mg', 11, true, 'fe') : ''}
+    ${cov.mg > 0 ? row('Magnesium', x.mg, 'mg', 400, true, 'mg') : ''}${cov.vc > 0 ? row('Vitamin C', x.vc, 'mg', 100, true, 'vc') : ''}${cov.ch > 0 ? row('Cholesterin', x.ch, 'mg', 300, false, 'ch') : ''}
+    <p class="muted">${anyX ? `Mineralstoffe und Vitamine gibt es nur für Einträge aus der Gerichte-Datenbank (USDA). Für ${minCov} % deiner heutigen Kalorien liegen Werte vor, ein * heißt: unvollständig, also eher zu niedrig.` : 'Mineralstoffe und Vitamine erscheinen, sobald du Einträge aus der Gerichte-Datenbank (USDA) verwendest. Packungsprodukte haben dafür meist keine Daten.'}
+    Richtwerte (grob, DGE): höchstens 50 g Zucker, 10 % der Energie als gesättigtes Fett, 6 g Salz, mindestens 30 g Ballaststoffe.</p>`;
 }
 
 function viewFood() {
@@ -167,9 +225,7 @@ function viewFood() {
   ${sg.length ? `<div class="card"><h2>Was passt jetzt?</h2><p class="muted" style="margin-top:-4px">Passend zu deiner Tageszeit und dem, was dir heute noch fehlt.</p>${sg.map((o) => suggRow(o, defaultMeal())).join('')}</div>` : ''}
   ${meals}
   ${waterCard(d, tg)}
-  <div class="card"><details><summary>Nährwerte im Detail</summary>
-    ${row('Zucker', tot.s, 50, 'g', false)}${row('Gesättigte Fette', tot.sf, satLimit, 'g', false)}${row('Ballaststoffe', tot.fi, 30, 'g', true)}${row('Salz', tot.sa, 6, 'g', false)}
-    <p class="muted">Richtwerte: höchstens 50 g Zucker, 10 % der Energie als gesättigtes Fett, 6 g Salz, mindestens 30 g Ballaststoffe. Vitamine und Mineralstoffe zeige ich nicht, dazu sind die Daten nicht verlässlich genug.</p></details></div>
+  <div class="card"><details><summary>Nährwerte im Detail</summary>${detailHTML(tot, ents, tg)}</details></div>
   <div class="card"><h2>Gewicht</h2>
     ${lastW ? `<div class="wline"><b>${r1(lastW.trend)} kg</b><small>Trend · zuletzt ${r1(lastW.kg)} kg am ${fmtShort(parseISO(lastW.date))}</small>${spark(sparkSer.map((s) => s.trend), 'var(--ball)')}</div>` : '<p class="muted">Trag dein Gewicht ein, am besten morgens. Ich glätte Schwankungen zu einem Trend.</p>'}
     <form data-form="f-weight" class="coachform"><input name="kg" type="number" step="0.1" min="30" max="250" placeholder="kg" inputmode="decimal"><button class="btn sm">Eintragen</button></form>
@@ -481,6 +537,12 @@ function openCustom(pre = {}) {
     <label>davon Zucker g<input name="s" type="number" step="any" value="0"></label><label>ges. Fett g<input name="sf" type="number" step="any" value="0"></label>
     <label>Ballaststoffe g<input name="fi" type="number" step="any" value="0"></label><label>Salz g<input name="sa" type="number" step="any" value="0"></label>
     <label>Portion (Gramm)<input name="pg" type="number" step="any" placeholder="optional"></label><label>Portionsname<input name="pn" placeholder="z. B. 1 Scheibe"></label></div>
+    <details><summary>Weitere Nährwerte (optional, pro 100 g)</summary><div class="grid2">
+      <label>Einfach ungesättigt g<input name="mo" type="number" step="any"></label><label>Mehrfach ungesättigt g<input name="po" type="number" step="any"></label>
+      <label>Ballaststoffe löslich g<input name="fs" type="number" step="any"></label><label>Ballaststoffe unlöslich g<input name="fu" type="number" step="any"></label>
+      <label>Cholesterin mg<input name="ch" type="number" step="any"></label><label>Kalium mg<input name="ka" type="number" step="any"></label>
+      <label>Calcium mg<input name="ca" type="number" step="any"></label><label>Eisen mg<input name="fe" type="number" step="any"></label>
+      <label>Magnesium mg<input name="mg" type="number" step="any"></label><label>Vitamin C mg<input name="vc" type="number" step="any"></label></div></details>
     <button class="btn full">Speichern und verwenden</button></form>`);
 }
 function openQuick() {
@@ -580,8 +642,9 @@ function foodHandlers(D) {
     },
     'f-water': () => {
       S.water[fui.date] = Math.max(0, (S.water[fui.date] || 0) + (+D.n));
-      persist(); render();
+      persist(); closeSheet(); render();
     },
+    'f-waterset': openWaterSheet,
     'f-cat': () => openBrowse(D.c),
     'f-more': () => { fbrowse.shown += 40; renderBrowse(); },
     'f-sugg': () => {
@@ -635,6 +698,7 @@ document.addEventListener('submit', (ev) => {
       id: 'c' + uid(), name: fd.name.trim(), src: 'custom', code: fd.code || '', k: +fd.k, p: +fd.p || 0, c: +fd.c || 0, f: +fd.f || 0,
       s: +fd.s || 0, sf: +fd.sf || 0, fi: +fd.fi || 0, sa: +fd.sa || 0, portions: fd.pg ? [{ n: fd.pn || 'Portion', g: +fd.pg }] : [],
     };
+    XNUTS.forEach((k) => { if (fd[k] !== '' && fd[k] != null && !isNaN(+fd[k])) food[k] = +fd[k]; });
     S.foods.push(food);
     persist();
     openAmount(food);
@@ -645,10 +709,12 @@ document.addEventListener('submit', (ev) => {
     NUTS.forEach((k) => { tot[k] = 0; });
     r.items.forEach((it) => { const n = nutOf(it.food, it.g); NUTS.forEach((k) => { tot[k] += n[k]; }); tot.g += it.g; });
     const per100 = (v) => round1((v / tot.g) * 100);
+    const xr = {};
+    XNUTS.forEach((k) => { if (r.items.length && r.items.every((it) => it.food[k] != null)) xr[k] = Math.round((r.items.reduce((a, it) => a + it.food[k] * it.g / 100, 0) / tot.g) * 10000) / 100; });
     const food = {
       id: 'r' + uid(), name: r.name, src: 'custom', k: Math.round((tot.k / tot.g) * 100), p: per100(tot.p), c: per100(tot.c), f: per100(tot.f),
       s: per100(tot.s), sf: per100(tot.sf), fi: per100(tot.fi), sa: per100(tot.sa),
-      portions: [{ n: '1 Portion', g: Math.round(tot.g / r.servings) }, { n: 'Alles', g: Math.round(tot.g) }],
+      portions: [{ n: '1 Portion', g: Math.round(tot.g / r.servings) }, { n: 'Alles', g: Math.round(tot.g) }], ...xr,
     };
     S.foods.push(food);
     fui.recipe = null; fui.mode = 'log';
@@ -669,6 +735,11 @@ document.addEventListener('submit', (ev) => {
     S.body = S.body.filter((x) => x.date !== T);
     S.body.push({ date: T, kg });
     persist(); render(); toast('Gewicht eingetragen');
+  } else if (kind === 'f-water-set') {
+    if (+fd.glass >= 50) S.settings.glassMl = Math.round(+fd.glass);
+    S.settings.waterGoal = +fd.goal > 0 ? Math.round(+fd.goal) : 0;
+    if (+fd.add > 0) S.water[fui.date] = (S.water[fui.date] || 0) + Math.round(+fd.add);
+    persist(); closeSheet(); render(); toast('Gespeichert');
   } else if (kind === 'f-code') {
     stopScan();
     lookupCode(fd.code);

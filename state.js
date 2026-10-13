@@ -8,6 +8,7 @@ const SPORTS = {
   swim: { name: 'Schwimmen', icon: '🏊', color: 'var(--swim)' },
   bike: { name: 'Radfahren', icon: '🚴', color: 'var(--bike)' },
   race: { name: 'Marathon', icon: '🏁', color: 'var(--gold)' },
+  other: { name: 'Sonstiges', icon: '🏅', color: 'var(--other)' },
 };
 const SPORT_NAME = { run: 'Laufen', football: 'Fußball', gym: 'Gym', swim: 'Schwimmen', bike: 'Radfahren', race: 'Laufen' };
 const TYPE_OF_NAME = { Laufen: 'run', Fußball: 'football', Gym: 'gym', Schwimmen: 'swim', Radfahren: 'bike' };
@@ -19,6 +20,7 @@ const OTHER_ICONS = {
   Workout: '💪', Crossfit: '💪', HIIT: '🔥', Golf: '⛳', Surfen: '🏄', Skateboard: '🛹', Sonstiges: '🏅',
 };
 const SPORT_LIST = ['Laufen', 'Fußball', 'Gym', 'Radfahren', 'Schwimmen', ...Object.keys(OTHER_ICONS)];
+const metaOf = (s) => (s.t === 'other' ? sportMeta(s.sport) : SPORTS[s.t]);
 function sportMeta(name) {
   const t = TYPE_OF_NAME[name];
   if (t) return SPORTS[t];
@@ -61,6 +63,8 @@ const DEFAULT_SETTINGS = {
   maintainKm: 25,     // Wunsch-Wochenkilometer im Modus "fit bleiben"
   maxHR: 195,         // Maximalpuls, wird fuer die Anstrengung aus dem Puls gebraucht
   worker: { url: '', key: '' },
+  glassMl: 250,       // Glasgroesse fuer den Wasser-Tracker
+  waterGoal: 0,       // eigenes Tagesziel in ml, 0 = automatisch
   profile: null,      // Gewicht, Groesse, Alter fuer das Kalorienziel
   syncAt: 0,
   lastExport: 0,      // wann zuletzt eine Sicherung exportiert wurde

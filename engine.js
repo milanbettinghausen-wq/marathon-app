@@ -9,7 +9,7 @@ function paces(add = 0) {
   return { mp: fmtPace(mp), easy: rg(1.14, 1.26, add), tempo: rg(0.93, 0.955), interval: rg(0.85, 0.88), mpSec: mp };
 }
 
-const sportOfType = (t) => SPORT_NAME[t];
+const sportOfType = (t, s) => (t === 'other' && s ? s.sport : SPORT_NAME[t]);
 const logsOn = (d) => S.log.filter((e) => e.date === d);
 function runKm(fromD, toD) {
   const a = iso(fromD), b = iso(toD);
@@ -173,7 +173,7 @@ function weekSessions(monISO) {
   Object.entries(days).forEach(([di, list]) => {
     const pool = logsOn(di).slice();
     list.forEach((s) => {
-      const name = sportOfType(s.t);
+      const name = sportOfType(s.t, s);
       const idx = pool.findIndex((e) => e.sport === name);
       if (idx >= 0) { s.done = true; s.entry = pool[idx]; pool.splice(idx, 1); }
     });
@@ -296,6 +296,10 @@ function describe(s, m) {
   if (s.t === 'football') {
     s.title = s.n || 'Fußball';
     s.detail = `${s.min} min · Anstrengung etwa ${s.rpe}/10${m && m.wo === 0 ? ' · In der Rennwoche lieber locker.' : ''}`;
+    s.est = { min: s.min, rpe: s.rpe };
+  } else if (s.t === 'other') {
+    s.title = s.n || s.sport;
+    s.detail = `${s.min} min · Anstrengung etwa ${s.rpe}/10`;
     s.est = { min: s.min, rpe: s.rpe };
   } else if (s.t === 'gym') {
     const sp = st.gymSplits[s.split] || { name: 'Gym', ex: [] };
